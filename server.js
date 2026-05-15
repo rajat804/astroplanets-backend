@@ -3,8 +3,9 @@ const dotenv = require("dotenv");
 const cors = require("cors");
 const mongoose = require("mongoose");
 const connectDB = require("./config/db");
+const dns = require('dns');
+dns.setServers(["8.8.8.8", "1.1.1.1"]);
 const { initializeDefaultAdmin } = require("./controllers/adminController");
-
 dotenv.config();
 
 const app = express();
@@ -119,6 +120,13 @@ app.use('/api/social-content', require('./routes/socialContentRoutes'));
 app.use('/api/blogs', require('./routes/blogRoutes'));
 // Add with other routes
 app.use('/api/coupons', require('./routes/couponRoutes'));
+// send mail msg 
+app.use("/api/consultation", require('./routes/consultationRoutes'));
+// hero slide image 
+app.use('/api/hero-slides', require('./routes/heroSlideRoutes'));
+
+
+
 /* ================================
    ROOT
 ================================ */
