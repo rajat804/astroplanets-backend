@@ -125,8 +125,8 @@ app.use('/api/coupons', require('./routes/couponRoutes'));
 app.use("/api/consultation", require('./routes/consultationRoutes'));
 // hero slide image 
 app.use('/api/hero-slides', require('./routes/heroSlideRoutes'));
-
-
+app.use('/api/courses', require('./routes/courseRoutes'));
+app.use('/api/coursepayment', require('./routes/coursepaymentRoutes'));
 
 /* ================================
    ROOT
