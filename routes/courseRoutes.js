@@ -38,19 +38,20 @@ router.post("/upload/single", upload.single("image"), (req, res) => {
   }
 });
 
-// Add this route after your existing routes
+// Get unique course types
 router.get("/types", async (req, res) => {
   try {
     const types = await Course.distinct("type");
     res.json({ 
       success: true, 
-      types: types.filter(type => type && type !== null) // Remove empty values
+      types: types.filter(type => type && type !== null)
     });
   } catch (error) {
     console.error("Error fetching course types:", error);
     res.status(500).json({ success: false, message: error.message });
   }
 });
+
 // GET all courses
 router.get("/", async (req, res) => {
   try {
@@ -75,6 +76,7 @@ router.get("/:id", async (req, res) => {
     res.status(500).json({ success: false, message: error.message });
   }
 });
+
 // CREATE Course
 router.post("/", async (req, res) => {
   try {
@@ -84,9 +86,12 @@ router.post("/", async (req, res) => {
       level,
       duration,
       sessions,
-      courseLanguage,  // Changed from 'language'
+      courseLanguage,
       mode,
+      mrpPrice,
       price,
+      gstPercentage,
+      extraDiscount,
       rating,
       image,
       description,
@@ -145,9 +150,12 @@ router.post("/", async (req, res) => {
       level: level || "Diploma",
       duration: duration || "3 Months",
       sessions: sessions || "30+",
-      courseLanguage: courseLanguage || "Hindi, English",  // Changed field name
+      courseLanguage: courseLanguage || "Hindi, English",
       mode: mode || "Live Online",
+      mrpPrice: mrpPrice || "",
       price: price.trim(),
+      gstPercentage: gstPercentage ? Number(gstPercentage) : 18,
+      extraDiscount: extraDiscount ? Number(extraDiscount) : 0,
       rating: rating ? Number(rating) : 0,
       image: image.trim(),
       description: description.trim(),
@@ -180,25 +188,20 @@ router.put("/:id", async (req, res) => {
   try {
     const { id } = req.params;
     
-    console.log("Updating course:", id);
-    
-    // Find the course first
     const existingCourse = await Course.findById(id);
     if (!existingCourse) {
       return res.status(404).json({ success: false, message: "Course not found" });
     }
     
-    // Prepare update data - map language to courseLanguage if needed
     const updateData = {};
     
-    // Map the fields correctly
+    // Map all fields
     if (req.body.type !== undefined) updateData.type = req.body.type;
     if (req.body.title !== undefined) updateData.title = req.body.title;
     if (req.body.level !== undefined) updateData.level = req.body.level;
     if (req.body.duration !== undefined) updateData.duration = req.body.duration;
     if (req.body.sessions !== undefined) updateData.sessions = req.body.sessions;
     
-    // Handle language field - check both 'language' and 'courseLanguage'
     if (req.body.courseLanguage !== undefined) {
       updateData.courseLanguage = req.body.courseLanguage;
     } else if (req.body.language !== undefined) {
@@ -206,7 +209,10 @@ router.put("/:id", async (req, res) => {
     }
     
     if (req.body.mode !== undefined) updateData.mode = req.body.mode;
+    if (req.body.mrpPrice !== undefined) updateData.mrpPrice = req.body.mrpPrice;
     if (req.body.price !== undefined) updateData.price = req.body.price;
+    if (req.body.gstPercentage !== undefined) updateData.gstPercentage = Number(req.body.gstPercentage);
+    if (req.body.extraDiscount !== undefined) updateData.extraDiscount = Number(req.body.extraDiscount);
     if (req.body.rating !== undefined) updateData.rating = Number(req.body.rating);
     if (req.body.image !== undefined) updateData.image = req.body.image;
     if (req.body.description !== undefined) updateData.description = req.body.description;
@@ -240,9 +246,6 @@ router.put("/:id", async (req, res) => {
       updateData.includes = Array.isArray(includes) ? includes.filter(i => i && i.trim()) : [];
     }
     
-    console.log("Update data:", JSON.stringify(updateData, null, 2));
-    
-    // Update the course
     const updatedCourse = await Course.findByIdAndUpdate(
       id, 
       updateData, 
