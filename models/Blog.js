@@ -9,7 +9,6 @@ const blogSchema = new mongoose.Schema(
     },
     slug: {
       type: String,
-      required: true,
       unique: true,
       lowercase: true,
       trim: true,
@@ -72,7 +71,7 @@ const blogSchema = new mongoose.Schema(
 );
 
 // Generate slug before saving
-blogSchema.pre('save', function(next) {
+blogSchema.pre('save', function (next) {
   if (this.title && (!this.slug || this.isModified('title'))) {
     this.slug = this.title
       .toLowerCase()
