@@ -5,7 +5,6 @@ exports.createSlide = async (req, res) => {
   try {
     const totalSlides = await HeroSlide.countDocuments();
 
-    // 10 SLIDES LIMIT
     if (totalSlides >= 10) {
       return res.status(400).json({
         success: false,
@@ -15,6 +14,8 @@ exports.createSlide = async (req, res) => {
 
     const slide = await HeroSlide.create({
       image: req.file.path,
+
+      link: req.body.link,
     });
 
     res.status(201).json({
@@ -80,6 +81,8 @@ exports.updateSlide = async (req, res) => {
     if (req.file) {
       slide.image = req.file.path;
     }
+
+    slide.link = req.body.link || slide.link;
 
     await slide.save();
 
