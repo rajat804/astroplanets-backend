@@ -5,24 +5,24 @@ const Blog = require('../models/Blog');
 // @access  Public
 const getAllBlogs = async (req, res) => {
   const { tag, page = 1, limit = 6 } = req.query;
-  
+
   try {
     let query = { isPublished: true };
     if (tag) query.tag = tag;
-    
+
     const skip = (parseInt(page) - 1) * parseInt(limit);
-    
+
     const blogs = await Blog.find(query)
       .sort({ createdAt: -1 })
       .skip(skip)
       .limit(parseInt(limit))
       .select('title slug tag image excerpt author readTime createdAt views likes');
-    
+
     const total = await Blog.countDocuments(query);
-    
+
     // Get all unique tags for filter
     const allTags = await Blog.distinct('tag', { isPublished: true });
-    
+
     res.json({
       blogs,
       tags: allTags,
@@ -45,15 +45,15 @@ const getAllBlogs = async (req, res) => {
 const getBlogBySlug = async (req, res) => {
   try {
     const blog = await Blog.findOne({ slug: req.params.slug, isPublished: true });
-    
+
     if (!blog) {
       return res.status(404).json({ msg: 'Blog not found' });
     }
-    
+
     // Increment views
     blog.views += 1;
     await blog.save();
-    
+
     // Get related blogs (same tag)
     const relatedBlogs = await Blog.find({
       _id: { $ne: blog._id },
@@ -62,7 +62,7 @@ const getBlogBySlug = async (req, res) => {
     })
       .limit(3)
       .select('title slug image excerpt createdAt');
-    
+
     res.json({ blog, relatedBlogs });
   } catch (error) {
     console.error('Get blog error:', error);
@@ -78,14 +78,14 @@ const getAllBlogsAdmin = async (req, res) => {
     const blogs = await Blog.find()
       .sort({ createdAt: -1 })
       .populate('createdBy', 'fullName email');
-    
+
     const stats = {
       total: await Blog.countDocuments(),
       published: await Blog.countDocuments({ isPublished: true }),
       drafts: await Blog.countDocuments({ isPublished: false }),
       totalViews: await Blog.aggregate([{ $group: { _id: null, total: { $sum: '$views' } } }]),
     };
-    
+
     res.json({ blogs, stats });
   } catch (error) {
     console.error('Get blogs admin error:', error);
@@ -125,7 +125,7 @@ const createBlog = async (req, res) => {
     seoTitle,
     seoDescription,
   } = req.body;
-  
+
   try {
     const blog = await Blog.create({
       title,
@@ -140,11 +140,14 @@ const createBlog = async (req, res) => {
       seoDescription: seoDescription || excerpt,
       createdBy: req.admin._id,
     });
-    
+
     res.status(201).json({ msg: 'Blog created successfully', blog });
   } catch (error) {
-    console.error('Create blog error:', error);
-    res.status(500).json({ msg: 'Server error', error: error.message });
+    console.error(error);
+    res.status(500).json({
+      msg: error.message,
+      error,
+    });
   }
 };
 
@@ -166,13 +169,13 @@ const updateBlog = async (req, res) => {
     seoTitle,
     seoDescription,
   } = req.body;
-  
+
   try {
     const blog = await Blog.findById(id);
     if (!blog) {
       return res.status(404).json({ msg: 'Blog not found' });
     }
-    
+
     blog.title = title || blog.title;
     blog.tag = tag || blog.tag;
     blog.image = image || blog.image;
@@ -184,9 +187,9 @@ const updateBlog = async (req, res) => {
     blog.tags = tags || blog.tags;
     blog.seoTitle = seoTitle || blog.seoTitle;
     blog.seoDescription = seoDescription || blog.seoDescription;
-    
+
     await blog.save();
-    
+
     res.json({ msg: 'Blog updated successfully', blog });
   } catch (error) {
     console.error('Update blog error:', error);
@@ -199,13 +202,13 @@ const updateBlog = async (req, res) => {
 // @access  Private/Admin
 const deleteBlog = async (req, res) => {
   const { id } = req.params;
-  
+
   try {
     const blog = await Blog.findById(id);
     if (!blog) {
       return res.status(404).json({ msg: 'Blog not found' });
     }
-    
+
     await blog.deleteOne();
     res.json({ msg: 'Blog deleted successfully' });
   } catch (error) {
@@ -219,16 +222,16 @@ const deleteBlog = async (req, res) => {
 // @access  Private/Admin
 const togglePublish = async (req, res) => {
   const { id } = req.params;
-  
+
   try {
     const blog = await Blog.findById(id);
     if (!blog) {
       return res.status(404).json({ msg: 'Blog not found' });
     }
-    
+
     blog.isPublished = !blog.isPublished;
     await blog.save();
-    
+
     res.json({ msg: `Blog ${blog.isPublished ? 'published' : 'unpublished'}`, blog });
   } catch (error) {
     console.error('Toggle publish error:', error);
@@ -241,16 +244,16 @@ const togglePublish = async (req, res) => {
 // @access  Public
 const likeBlog = async (req, res) => {
   const { id } = req.params;
-  
+
   try {
     const blog = await Blog.findById(id);
     if (!blog) {
       return res.status(404).json({ msg: 'Blog not found' });
     }
-    
+
     blog.likes += 1;
     await blog.save();
-    
+
     res.json({ msg: 'Liked', likes: blog.likes });
   } catch (error) {
     console.error('Like blog error:', error);
