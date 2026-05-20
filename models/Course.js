@@ -22,7 +22,6 @@ const courseSchema = new mongoose.Schema({
     type: String, 
     default: "30+"
   },
-  // ✅ CHANGE: Rename 'language' to 'courseLanguage' to avoid MongoDB conflict
   courseLanguage: { 
     type: String, 
     default: "Hindi, English"
@@ -31,9 +30,21 @@ const courseSchema = new mongoose.Schema({
     type: String, 
     default: "Live Online"
   },
+  mrpPrice: { 
+    type: String, 
+    default: ""
+  },
   price: { 
     type: String, 
     required: true
+  },
+  gstPercentage: { 
+    type: Number, 
+    default: 18
+  },
+  extraDiscount: { 
+    type: Number, 
+    default: 0
   },
   rating: { 
     type: Number, 
@@ -69,8 +80,6 @@ const courseSchema = new mongoose.Schema({
   timestamps: true 
 });
 
-// Remove any text indexes that might be causing issues
-// If you need search, create a compound index instead
 courseSchema.index({ title: 1 });
 courseSchema.index({ type: 1 });
 
