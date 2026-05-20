@@ -14,8 +14,8 @@ const {
 const { protectAdmin } = require('../middleware/adminAuth');
 
 // Public routes
+// Public routes
 router.get('/', getAllBlogs);
-router.get('/:slug', getBlogBySlug);
 router.put('/:id/like', likeBlog);
 
 // Admin routes
@@ -25,5 +25,8 @@ router.post('/admin', protectAdmin, createBlog);
 router.put('/admin/:id', protectAdmin, updateBlog);
 router.delete('/admin/:id', protectAdmin, deleteBlog);
 router.patch('/admin/:id/toggle', protectAdmin, togglePublish);
+
+// KEEP THIS LAST
+router.get('/:slug', getBlogBySlug);
 
 module.exports = router;
