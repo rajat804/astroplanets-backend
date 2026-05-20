@@ -38,6 +38,19 @@ router.post("/upload/single", upload.single("image"), (req, res) => {
   }
 });
 
+// Add this route after your existing routes
+router.get("/types", async (req, res) => {
+  try {
+    const types = await Course.distinct("type");
+    res.json({ 
+      success: true, 
+      types: types.filter(type => type && type !== null) // Remove empty values
+    });
+  } catch (error) {
+    console.error("Error fetching course types:", error);
+    res.status(500).json({ success: false, message: error.message });
+  }
+});
 // GET all courses
 router.get("/", async (req, res) => {
   try {
@@ -62,7 +75,6 @@ router.get("/:id", async (req, res) => {
     res.status(500).json({ success: false, message: error.message });
   }
 });
-
 // CREATE Course
 router.post("/", async (req, res) => {
   try {
