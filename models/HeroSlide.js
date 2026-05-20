@@ -6,6 +6,10 @@ const heroSlideSchema = new mongoose.Schema(
       type: String,
       required: true,
     },
+    link: {
+      type: String,
+      default: "",
+    },
   },
   { timestamps: true }
 );
