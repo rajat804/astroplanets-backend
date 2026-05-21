@@ -127,6 +127,10 @@ app.use("/api/consultation", require('./routes/consultationRoutes'));
 app.use('/api/hero-slides', require('./routes/heroSlideRoutes'));
 app.use('/api/courses', require('./routes/courseRoutes'));
 app.use('/api/coursepayment', require('./routes/coursepaymentRoutes'));
+app.use('/api/services', require('./routes/serviceRouter'));
+app.use("/api/servicebookings", require('./routes/serviceBookingRoutes'));
+app.use("/api/experts",require('./routes/expertRoutes'));
+app.use("/api/expert-bookings", require('./routes/expertBookingRoutes'));
 
 /* ================================
    ROOT
