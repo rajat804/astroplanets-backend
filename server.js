@@ -2,6 +2,7 @@ const express = require("express");
 const dotenv = require("dotenv");
 const cors = require("cors");
 const mongoose = require("mongoose");
+const axios = require("axios");
 const connectDB = require("./config/db");
 const dns = require('dns');
 dns.setServers(["8.8.8.8", "1.1.1.1"]);
@@ -52,6 +53,42 @@ app.options("*", cors());
 ================================ */
 app.use(express.json());
 app.use(express.urlencoded({ extended: true }));
+
+
+// ================================
+// PROKERALA TOKEN
+// ================================
+
+const getToken = async () => {
+
+  try {
+
+    const response = await axios.post(
+      "https://api.prokerala.com/token",
+
+      new URLSearchParams({
+        grant_type: "client_credentials",
+        client_id: process.env.CLIENT_ID,
+        client_secret: process.env.CLIENT_SECRET,
+      }),
+
+      {
+        headers: {
+          "Content-Type":
+            "application/x-www-form-urlencoded",
+        },
+      }
+    );
+
+    return response.data.access_token;
+
+  } catch (error) {
+
+    console.log(
+      error.response?.data || error.message
+    );
+  }
+};
 
 /* ================================
    🔥 DB CONNECTION MIDDLEWARE (FIX)
@@ -135,6 +172,57 @@ app.use("/api/expert-bookings", require('./routes/expertBookingRoutes'));
 /* ================================
    ROOT
 ================================ */
+/* ================================
+   PROKERALA CALENDAR API
+================================ */
+
+app.get("/api/calendar", async (req, res) => {
+
+  try {
+
+    // Query se date lo
+    let { date } = req.query;
+
+    // Agar date nahi aayi toh today's date use karo
+    if (!date) {
+
+      const today = new Date();
+
+      // YYYY-MM-DD format
+      date = today.toISOString().split("T")[0];
+    }
+
+    const token = await getToken();
+
+    const response = await axios.get(
+      "https://api.prokerala.com/v2/astrology/panchang",
+
+      {
+        params: {
+          datetime: `${date}T12:00:00+05:30`,
+          coordinates: "28.6139,77.2090",
+          ayanamsa: 1
+        },
+
+        headers: {
+          Authorization: `Bearer ${token}`,
+        },
+      }
+    );
+
+    res.json(response.data);
+
+  } catch (error) {
+
+    console.log(
+      error.response?.data || error.message
+    );
+
+    res.status(500).json({
+      error: "Calendar API failed",
+    });
+  }
+});
 app.get("/", (req, res) => {
   res.json({
     message: "AstroPlanets Auth API is running",
