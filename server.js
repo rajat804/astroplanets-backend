@@ -168,6 +168,10 @@ app.use('/api/services', require('./routes/serviceRouter'));
 app.use("/api/servicebookings", require('./routes/serviceBookingRoutes'));
 app.use("/api/experts",require('./routes/expertRoutes'));
 app.use("/api/expert-bookings", require('./routes/expertBookingRoutes'));
+app.use("/api/admindashboard", require('./routes/adminDashboardRoutes'));
+app.use("/api/plans", require('./routes/planRoutes'));
+
+
 
 /* ================================
    ROOT
