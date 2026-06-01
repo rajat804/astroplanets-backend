@@ -21,13 +21,35 @@ const transporter = nodemailer.createTransport({
   }
 });
 
-// Send email function
+// Helper function to get category display name
+const getCategoryDisplayName = (categoryValue) => {
+  const categoryMap = {
+    career_counselling: "Career Counselling",
+    relationship_counselling: "Relationship Counselling",
+    all_over_guidance: "All Over Guidance",
+    home_vastu_1bhk: "Home Vastu (1BHK)",
+    home_vastu_2bhk: "Home Vastu (2BHK)",
+    home_vastu_other: "Home Vastu (Other)",
+    plot_vastu: "Plot Vastu",
+    factory_vastu: "Factory Vastu",
+    name_numerology: "Name Numerology",
+    marriage_compatibility: "Marriage Compatibility",
+    vehicle_number_selection: "Vehicle Number Selection",
+    counselling: "Counselling",
+  };
+  return categoryMap[categoryValue] || categoryValue || "General";
+};
+
+// Enhanced Send email function with all dynamic fields
 const sendBookingEmails = async (bookingData, service, paymentId) => {
+  const categoryDisplayName = getCategoryDisplayName(service.category);
+  const serviceTypeDisplay = service.titleKey ? service.titleKey.charAt(0).toUpperCase() + service.titleKey.slice(1) : "Expert";
+
   // Email to Admin
   const adminMailOptions = {
     from: process.env.EMAIL_USER,
     to: "contact.astroplanets@gmail.com",
-    subject: `💰 New Paid Booking: ${service.title}`,
+    subject: `💰 New Paid Booking: ${service.title} (${categoryDisplayName})`,
     html: `
       <!DOCTYPE html>
       <html>
@@ -35,26 +57,32 @@ const sendBookingEmails = async (bookingData, service, paymentId) => {
         <meta charset="UTF-8">
         <meta name="viewport" content="width=device-width, initial-scale=1.0">
         <style>
-          body { font-family: 'Segoe UI', Arial, sans-serif; line-height: 1.6; color: #333; }
+          body { font-family: 'Segoe UI', Arial, sans-serif; line-height: 1.6; color: #333; background: #f5f5f5; }
           .container { max-width: 600px; margin: 0 auto; padding: 20px; }
-          .header { background: linear-gradient(135deg, #667eea 0%, #764ba2 100%); color: white; padding: 20px; text-align: center; border-radius: 10px 10px 0 0; }
-          .content { background: #f8f9fa; padding: 20px; border: 1px solid #e0e0e0; border-top: none; border-radius: 0 0 10px 10px; }
-          .info-row { margin-bottom: 12px; padding: 10px; background: white; border-radius: 8px; border-left: 3px solid #764ba2; }
-          .label { font-weight: bold; color: #764ba2; min-width: 120px; display: inline-block; }
-          .payment-status { background: #10b981; color: white; padding: 8px 16px; border-radius: 20px; display: inline-block; margin-top: 10px; }
-          .footer { text-align: center; padding: 15px; font-size: 12px; color: #666; }
+          .header { background: linear-gradient(135deg, #8b5cf6, #ec4899); color: white; padding: 25px; text-align: center; border-radius: 15px 15px 0 0; }
+          .content { background: white; padding: 25px; border-radius: 0 0 15px 15px; box-shadow: 0 2px 10px rgba(0,0,0,0.1); }
+          .info-row { margin-bottom: 12px; padding: 10px; background: #f8f9fa; border-radius: 8px; border-left: 4px solid #8b5cf6; }
+          .label { font-weight: bold; color: #8b5cf6; min-width: 140px; display: inline-block; }
+          .payment-status { background: linear-gradient(135deg, #10b981, #059669); color: white; padding: 10px 20px; border-radius: 25px; display: inline-block; margin-bottom: 20px; font-weight: bold; }
+          .category-badge { background: #8b5cf6; color: white; padding: 4px 12px; border-radius: 20px; font-size: 12px; display: inline-block; margin-left: 10px; }
+          .footer { text-align: center; padding: 20px; font-size: 12px; color: #666; border-top: 1px solid #eee; margin-top: 20px; }
+          h3 { color: #333; margin-top: 20px; margin-bottom: 10px; border-bottom: 2px solid #f0f0f0; padding-bottom: 8px; }
         </style>
       </head>
       <body>
         <div class="container">
           <div class="header">
-            <h2>💰 New Paid Booking Request 💰</h2>
+            <h2>💰 New Paid Booking Request</h2>
+            <p style="margin-top: 5px; opacity: 0.9;">${serviceTypeDisplay} Consultation</p>
           </div>
           <div class="content">
-            <div class="payment-status">✅ Payment Received</div>
+            <div class="payment-status">✅ Payment Received - ₹${bookingData.amount}</div>
+            
             <h3>📋 Service Details:</h3>
             <div class="info-row"><span class="label">Service:</span> ${service.title}</div>
-            <div class="info-row"><span class="label">Duration:</span> ${service.duration}</div>
+            <div class="info-row"><span class="label">Category:</span> ${categoryDisplayName}</div>
+            <div class="info-row"><span class="label">Service Type:</span> ${serviceTypeDisplay}</div>
+            <div class="info-row"><span class="label">Duration:</span> ${service.duration || "Not specified"}</div>
             <div class="info-row"><span class="label">Amount Paid:</span> ₹${bookingData.amount}</div>
             <div class="info-row"><span class="label">Payment ID:</span> ${paymentId}</div>
             
@@ -70,6 +98,7 @@ const sendBookingEmails = async (bookingData, service, paymentId) => {
           </div>
           <div class="footer">
             <p>Please contact the customer within 24 hours to confirm the appointment.</p>
+            <p style="margin-top: 10px;">🔮 Astrology Platform Team</p>
           </div>
         </div>
       </body>
@@ -81,7 +110,7 @@ const sendBookingEmails = async (bookingData, service, paymentId) => {
   const customerMailOptions = {
     from: process.env.EMAIL_USER,
     to: bookingData.userEmail,
-    subject: `✨ Booking Confirmed: ${service.title}`,
+    subject: `✨ Booking Confirmed: ${service.title} - ${categoryDisplayName}`,
     html: `
       <!DOCTYPE html>
       <html>
@@ -89,11 +118,14 @@ const sendBookingEmails = async (bookingData, service, paymentId) => {
         <meta charset="UTF-8">
         <meta name="viewport" content="width=device-width, initial-scale=1.0">
         <style>
-          body { font-family: 'Segoe UI', Arial, sans-serif; line-height: 1.6; color: #333; }
+          body { font-family: 'Segoe UI', Arial, sans-serif; line-height: 1.6; color: #333; background: #f5f5f5; }
           .container { max-width: 600px; margin: 0 auto; padding: 20px; }
-          .header { background: linear-gradient(135deg, #667eea 0%, #764ba2 100%); color: white; padding: 20px; text-align: center; border-radius: 10px 10px 0 0; }
-          .content { background: #f8f9fa; padding: 20px; border: 1px solid #e0e0e0; border-top: none; border-radius: 0 0 10px 10px; text-align: center; }
-          .payment-status { background: #10b981; color: white; padding: 8px 16px; border-radius: 20px; display: inline-block; margin-bottom: 20px; }
+          .header { background: linear-gradient(135deg, #8b5cf6, #ec4899); color: white; padding: 25px; text-align: center; border-radius: 15px 15px 0 0; }
+          .content { background: white; padding: 25px; border-radius: 0 0 15px 15px; text-align: center; box-shadow: 0 2px 10px rgba(0,0,0,0.1); }
+          .payment-status { background: linear-gradient(135deg, #10b981, #059669); color: white; padding: 10px 20px; border-radius: 25px; display: inline-block; margin-bottom: 20px; font-weight: bold; }
+          .info-card { background: #f8f9fa; padding: 20px; border-radius: 12px; margin: 20px 0; text-align: left; }
+          .info-card p { margin: 10px 0; }
+          .footer { text-align: center; padding: 20px; font-size: 12px; color: #666; border-top: 1px solid #eee; margin-top: 20px; }
         </style>
       </head>
       <body>
@@ -105,18 +137,31 @@ const sendBookingEmails = async (bookingData, service, paymentId) => {
             <div class="payment-status">✅ Payment Received - ₹${bookingData.amount}</div>
             <p>Dear <strong>${bookingData.userName}</strong>,</p>
             <p>Thank you for booking <strong>${service.title}</strong> with us!</p>
+            <p><strong>Service Category:</strong> ${categoryDisplayName}</p>
             <p>Your payment has been received successfully. We will contact you within <strong>24 hours</strong> to confirm your appointment.</p>
             
-            <div style="background: white; padding: 15px; border-radius: 8px; margin: 20px 0;">
+            <div class="info-card">
               <p><strong>📅 Preferred Date:</strong> ${bookingData.preferredDate}</p>
               <p><strong>⏰ Preferred Time:</strong> ${bookingData.preferredTime}</p>
               <p><strong>💰 Amount Paid:</strong> ₹${bookingData.amount}</p>
               <p><strong>💳 Payment ID:</strong> ${paymentId}</p>
+              ${service.duration ? `<p><strong>⏱️ Duration:</strong> ${service.duration}</p>` : ''}
             </div>
+            
+            <p><strong>What happens next?</strong></p>
+            <ol style="text-align: left;">
+              <li>Our team will review your booking</li>
+              <li>You'll receive a confirmation call/message</li>
+              <li>Meeting link will be shared before the session</li>
+              <li>Get ready for your consultation</li>
+            </ol>
             
             <p>If you have any questions, feel free to reply to this email.</p>
             <br>
             <p>With gratitude,<br><strong>Astrology Platform Team</strong></p>
+          </div>
+          <div class="footer">
+            <p>🔮 Thank you for choosing us!</p>
           </div>
         </div>
       </body>
@@ -128,7 +173,7 @@ const sendBookingEmails = async (bookingData, service, paymentId) => {
   await transporter.sendMail(customerMailOptions);
 };
 
-// CREATE ORDER
+// CREATE ORDER (with dynamic service details)
 router.post("/create-order", async (req, res) => {
   try {
     const { serviceId, userId, userEmail, userName, amount } = req.body;
@@ -146,6 +191,8 @@ router.post("/create-order", async (req, res) => {
       notes: {
         serviceId: serviceId,
         serviceTitle: service.title,
+        serviceTitleKey: service.titleKey || "",
+        serviceCategory: service.category || "",
         userId: userId,
       },
     };
@@ -158,6 +205,15 @@ router.post("/create-order", async (req, res) => {
       amount: order.amount,
       currency: order.currency,
       key: process.env.RAZORPAY_KEY_ID,
+      serviceDetails: {
+        title: service.title,
+        titleKey: service.titleKey,
+        category: service.category,
+        categoryDescription: service.categoryDescription,
+        duration: service.duration,
+        icon: service.icon,
+        gradientKey: service.gradientKey
+      }
     });
   } catch (error) {
     console.error("Error creating order:", error);
@@ -165,7 +221,7 @@ router.post("/create-order", async (req, res) => {
   }
 });
 
-// VERIFY PAYMENT AND CREATE BOOKING
+// VERIFY PAYMENT AND CREATE BOOKING (Save all fields from model)
 router.post("/verify-payment", async (req, res) => {
   try {
     const {
@@ -194,16 +250,22 @@ router.post("/verify-payment", async (req, res) => {
       return res.status(400).json({ success: false, message: "Invalid signature" });
     }
 
-    // Get service details
+    // Get service details with all fields
     const service = await Service.findById(serviceId);
     if (!service) {
       return res.status(404).json({ success: false, message: "Service not found" });
     }
 
-    // Create booking record
+    // Create booking record with ALL fields from the model
     const booking = new ServiceBooking({
       serviceId,
       serviceTitle: service.title,
+      serviceTitleKey: service.titleKey || "",
+      serviceCategory: service.category || "",
+      serviceCategoryDescription: service.categoryDescription || "",
+      serviceDuration: service.duration || "",
+      serviceIcon: service.icon || "GiCrystalBall",
+      serviceGradientKey: service.gradientKey || "purple",
       userId,
       userName,
       userEmail,
@@ -213,12 +275,14 @@ router.post("/verify-payment", async (req, res) => {
       message: message || "",
       amount,
       status: "confirmed",
-      paymentId: razorpay_payment_id
+      paymentId: razorpay_payment_id,
+      meetLink: "",
+      notes: ""
     });
 
     await booking.save();
 
-    // Send emails
+    // Send enhanced emails with all service details
     await sendBookingEmails({
       userName,
       userEmail,
@@ -262,6 +326,35 @@ router.get("/all", async (req, res) => {
     res.status(500).json({ success: false, message: error.message });
   }
 });
+
+// GET bookings by service title key (palmistry, vastu, numerology, yoga)
+router.get("/by-title/:titleKey", async (req, res) => {
+  try {
+    const { titleKey } = req.params;
+    const bookings = await ServiceBooking.find({ 
+      serviceTitleKey: titleKey 
+    }).sort({ createdAt: -1 });
+    res.json({ success: true, bookings });
+  } catch (error) {
+    console.error("Error fetching bookings by title:", error);
+    res.status(500).json({ success: false, message: error.message });
+  }
+});
+
+// GET bookings by category
+router.get("/by-category/:category", async (req, res) => {
+  try {
+    const { category } = req.params;
+    const bookings = await ServiceBooking.find({ 
+      serviceCategory: category 
+    }).sort({ createdAt: -1 });
+    res.json({ success: true, bookings });
+  } catch (error) {
+    console.error("Error fetching bookings by category:", error);
+    res.status(500).json({ success: false, message: error.message });
+  }
+});
+
 // GET CONFIRMED SERVICE BOOKINGS ONLY
 router.get("/confirmed", async (req, res) => {
   try {
@@ -288,6 +381,7 @@ router.get("/user/:userId/confirmed", async (req, res) => {
     res.status(500).json({ success: false, message: error.message });
   }
 });
+
 // UPDATE SERVICE MEET LINK
 router.put("/update-meet-link/:id", async (req, res) => {
   try {
@@ -303,6 +397,95 @@ router.put("/update-meet-link/:id", async (req, res) => {
     res.json({ success: true, booking, message: "Meet link updated successfully" });
   } catch (error) {
     console.error("Error updating meet link:", error);
+    res.status(500).json({ success: false, message: error.message });
+  }
+});
+
+// UPDATE BOOKING STATUS
+router.put("/update-status/:id", async (req, res) => {
+  try {
+    const { status } = req.body;
+    const validStatuses = ["pending", "confirmed", "cancelled", "completed"];
+    
+    if (!validStatuses.includes(status)) {
+      return res.status(400).json({ success: false, message: "Invalid status" });
+    }
+    
+    const booking = await ServiceBooking.findByIdAndUpdate(
+      req.params.id,
+      { status },
+      { new: true }
+    );
+    
+    if (!booking) {
+      return res.status(404).json({ success: false, message: "Booking not found" });
+    }
+    
+    res.json({ success: true, booking, message: `Booking status updated to ${status}` });
+  } catch (error) {
+    console.error("Error updating booking status:", error);
+    res.status(500).json({ success: false, message: error.message });
+  }
+});
+
+// UPDATE NOTES
+router.put("/update-notes/:id", async (req, res) => {
+  try {
+    const { notes } = req.body;
+    const booking = await ServiceBooking.findByIdAndUpdate(
+      req.params.id,
+      { notes },
+      { new: true }
+    );
+    if (!booking) {
+      return res.status(404).json({ success: false, message: "Booking not found" });
+    }
+    res.json({ success: true, booking, message: "Notes updated successfully" });
+  } catch (error) {
+    console.error("Error updating notes:", error);
+    res.status(500).json({ success: false, message: error.message });
+  }
+});
+
+// GET BOOKING STATISTICS (Admin)
+router.get("/admin/stats", async (req, res) => {
+  try {
+    const total = await ServiceBooking.countDocuments();
+    const confirmed = await ServiceBooking.countDocuments({ status: "confirmed" });
+    const pending = await ServiceBooking.countDocuments({ status: "pending" });
+    const cancelled = await ServiceBooking.countDocuments({ status: "cancelled" });
+    const completed = await ServiceBooking.countDocuments({ status: "completed" });
+    
+    // Stats by service type
+    const palmistryBookings = await ServiceBooking.countDocuments({ serviceTitleKey: "palmistry" });
+    const vastuBookings = await ServiceBooking.countDocuments({ serviceTitleKey: "vastu" });
+    const numerologyBookings = await ServiceBooking.countDocuments({ serviceTitleKey: "numerology" });
+    const yogaBookings = await ServiceBooking.countDocuments({ serviceTitleKey: "yoga" });
+    
+    // Total revenue
+    const allBookings = await ServiceBooking.find({ status: { $in: ["confirmed", "completed"] } });
+    const totalRevenue = allBookings.reduce((sum, booking) => sum + (booking.amount || 0), 0);
+    
+    res.json({
+      success: true,
+      stats: {
+        total,
+        confirmed,
+        pending,
+        cancelled,
+        completed,
+        byServiceType: {
+          palmistry: palmistryBookings,
+          vastu: vastuBookings,
+          numerology: numerologyBookings,
+          yoga: yogaBookings
+        },
+        totalRevenue,
+        averageOrderValue: total > 0 ? totalRevenue / total : 0
+      }
+    });
+  } catch (error) {
+    console.error("Error fetching booking stats:", error);
     res.status(500).json({ success: false, message: error.message });
   }
 });
