@@ -10,6 +10,30 @@ const serviceBookingSchema = new mongoose.Schema({
     type: String,
     required: true
   },
+  serviceTitleKey: {
+    type: String,
+    default: ""
+  },
+  serviceCategory: {
+    type: String,
+    default: ""
+  },
+  serviceCategoryDescription: {
+    type: String,
+    default: ""
+  },
+  serviceDuration: {
+    type: String,
+    default: ""
+  },
+  serviceIcon: {
+    type: String,
+    default: "GiCrystalBall"
+  },
+  serviceGradientKey: {
+    type: String,
+    default: "purple"
+  },
   userId: {
     type: String,
     required: true
@@ -42,15 +66,23 @@ const serviceBookingSchema = new mongoose.Schema({
     type: Number,
     required: true
   },
+  paymentId: {
+    type: String,
+    default: ""
+  },
   status: {
     type: String,
     enum: ["pending", "confirmed", "cancelled", "completed"],
     default: "pending"
   },
   meetLink: {
-  type: String,
-  default: ""
-},
+    type: String,
+    default: ""
+  },
+  notes: {
+    type: String,
+    default: ""
+  },
   createdAt: {
     type: Date,
     default: Date.now
