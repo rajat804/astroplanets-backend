@@ -6,6 +6,19 @@ const serviceSchema = new mongoose.Schema({
     required: true,
     trim: true
   },
+  titleKey: {
+    type: String,
+    enum: ["palmistry", "vastu", "numerology", "yoga", ""],
+    default: ""
+  },
+  category: {
+    type: String,
+    trim: true
+  },
+  categoryDescription: {
+    type: String,
+    default: ""
+  },
   description: {
     type: String,
     required: true,
@@ -13,7 +26,7 @@ const serviceSchema = new mongoose.Schema({
   },
   duration: {
     type: String,
-    required: true
+    default: ""
   },
   price: {
     type: String,
@@ -52,7 +65,7 @@ const serviceSchema = new mongoose.Schema({
   }],
   symbolType: {
     type: String,
-    enum: ["zodiac", "planets","directions","numbers", "elements", "none"],
+    enum: ["zodiac", "planets", "directions", "numbers", "elements", "none"],
     default: "zodiac"
   },
   isActive: {
