@@ -70,10 +70,17 @@ const serviceBookingSchema = new mongoose.Schema({
     type: String,
     default: ""
   },
+  // ✅ PAYMENT STATUS (Payment se related)
   status: {
     type: String,
     enum: ["pending", "confirmed", "cancelled", "completed"],
     default: "pending"
+  },
+  // ✅ CLASS STATUS (Schedule/Class se related) - NEW
+  classStatus: {
+    type: String,
+    enum: ["upcoming", "ongoing", "completed", "cancelled", "scheduled"],
+    default: "scheduled"
   },
   meetLink: {
     type: String,
@@ -86,7 +93,20 @@ const serviceBookingSchema = new mongoose.Schema({
   createdAt: {
     type: Date,
     default: Date.now
+  },
+  updatedAt: {
+    type: Date,
+    default: Date.now
   }
-});
+}, { timestamps: true });
+
+// Indexes for faster queries
+serviceBookingSchema.index({ userId: 1 });
+serviceBookingSchema.index({ serviceId: 1 });
+serviceBookingSchema.index({ status: 1 });
+serviceBookingSchema.index({ classStatus: 1 }); 
+serviceBookingSchema.index({ serviceTitleKey: 1 });
+serviceBookingSchema.index({ serviceCategory: 1 });
+serviceBookingSchema.index({ createdAt: -1 });
 
 module.exports = mongoose.model("ServiceBooking", serviceBookingSchema);
