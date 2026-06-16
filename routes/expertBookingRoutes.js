@@ -62,7 +62,9 @@ const sendBookingEmails = async (bookingData, expert) => {
   await transporter.sendMail(customerMailOptions);
 };
 
-// Create booking
+// ============================================
+// 1. CREATE BOOKING
+// ============================================
 router.post("/create", async (req, res) => {
   try {
     const {
@@ -82,6 +84,7 @@ router.post("/create", async (req, res) => {
       return res.status(404).json({ success: false, message: "Expert not found" });
     }
 
+    // ✅ Create with both status and classStatus
     const booking = new ExpertBooking({
       expertId,
       expertName,
@@ -92,7 +95,8 @@ router.post("/create", async (req, res) => {
       preferredDate,
       preferredTime,
       message,
-      status: "pending"
+      status: "pending",           // ✅ Payment status
+      classStatus: "scheduled"     // ✅ Class status - NEW
     });
 
     await booking.save();
@@ -111,7 +115,10 @@ router.post("/create", async (req, res) => {
     res.status(500).json({ success: false, message: error.message });
   }
 });
-// GET ALL EXPERT BOOKINGS (for admin)
+
+// ============================================
+// 2. GET ALL EXPERT BOOKINGS (Admin)
+// ============================================
 router.get("/all", async (req, res) => {
   try {
     const bookings = await ExpertBooking.find().sort({ createdAt: -1 });
@@ -122,7 +129,9 @@ router.get("/all", async (req, res) => {
   }
 });
 
-// Get user bookings
+// ============================================
+// 3. GET USER BOOKINGS
+// ============================================
 router.get("/user/:userId", async (req, res) => {
   try {
     const bookings = await ExpertBooking.find({ userId: req.params.userId }).sort({ createdAt: -1 });
@@ -132,22 +141,152 @@ router.get("/user/:userId", async (req, res) => {
   }
 });
 
-// UPDATE SESSION REQUEST STATUS
+// ============================================
+// 4. UPDATE PAYMENT STATUS (Admin)
+// ============================================
 router.put("/:id/status", async (req, res) => {
   try {
     const { status } = req.body;
-    const booking = await ExpertBooking.findByIdAndUpdate(
-      req.params.id,
-      { status },
-      { new: true }
-    );
+    
+    // ✅ Validate payment status
+    const validStatuses = ["pending", "confirmed", "cancelled", "completed"];
+    if (!validStatuses.includes(status)) {
+      return res.status(400).json({
+        success: false,
+        message: "Invalid status. Allowed: pending, confirmed, cancelled, completed"
+      });
+    }
+
+    // ✅ Check if transition is valid
+    const booking = await ExpertBooking.findById(req.params.id);
     if (!booking) {
       return res.status(404).json({ success: false, message: "Booking not found" });
     }
-    res.json({ success: true, booking, message: `Status updated to ${status}` });
+
+    const currentStatus = booking.status;
+    
+    // ✅ Valid transitions for payment status
+    const validTransitions = {
+      'pending': ['confirmed', 'cancelled'],
+      'confirmed': ['completed', 'cancelled'],
+      'completed': [],      // ❌ Cannot change
+      'cancelled': []       // ❌ Cannot change
+    };
+
+    if (!validTransitions[currentStatus]?.includes(status)) {
+      return res.status(400).json({
+        success: false,
+        message: `Cannot change payment status from "${currentStatus}" to "${status}"`,
+        allowedTransitions: validTransitions[currentStatus] || []
+      });
+    }
+
+    const updatedBooking = await ExpertBooking.findByIdAndUpdate(
+      req.params.id,
+      { status, updatedAt: new Date() },
+      { new: true }
+    );
+    
+    res.json({ success: true, booking: updatedBooking, message: `Status updated to ${status}` });
   } catch (error) {
     console.error("Error updating status:", error);
     res.status(500).json({ success: false, message: error.message });
   }
 });
+
+// ============================================
+// 5. UPDATE CLASS STATUS (Admin) - NEW
+// ============================================
+router.put("/:id/class-status", async (req, res) => {
+  try {
+    const { classStatus } = req.body;
+    
+    // ✅ Validate class status
+    const validClassStatuses = ["upcoming", "ongoing", "completed", "cancelled", "scheduled"];
+    if (!validClassStatuses.includes(classStatus)) {
+      return res.status(400).json({
+        success: false,
+        message: "Invalid class status. Allowed: upcoming, ongoing, completed, cancelled, scheduled"
+      });
+    }
+
+    const booking = await ExpertBooking.findByIdAndUpdate(
+      req.params.id,
+      { classStatus, updatedAt: new Date() },
+      { new: true }
+    );
+    
+    if (!booking) {
+      return res.status(404).json({ success: false, message: "Booking not found" });
+    }
+    
+    res.json({ success: true, booking, message: `Class status updated to ${classStatus}` });
+  } catch (error) {
+    console.error("Error updating class status:", error);
+    res.status(500).json({ success: false, message: error.message });
+  }
+});
+
+// ============================================
+// 6. UPDATE SCHEDULE (Admin) - NEW
+// ============================================
+router.put("/admin/update-schedule/:id", async (req, res) => {
+  try {
+    const { id } = req.params;
+    const { meetLink, preferredDate, preferredTime, classStatus } = req.body;
+
+    console.log(`🔄 Updating expert booking schedule for ${id}:`, { meetLink, preferredDate, preferredTime, classStatus });
+
+    const updateData = {};
+    if (meetLink !== undefined) updateData.meetLink = meetLink;
+    if (preferredDate) updateData.preferredDate = preferredDate;
+    if (preferredTime) updateData.preferredTime = preferredTime;
+    if (classStatus) updateData.classStatus = classStatus;
+    updateData.updatedAt = new Date();
+
+    const booking = await ExpertBooking.findByIdAndUpdate(
+      id,
+      updateData,
+      { new: true, runValidators: true }
+    );
+
+    if (!booking) {
+      return res.status(404).json({
+        success: false,
+        message: "Booking not found"
+      });
+    }
+
+    console.log(`✅ Expert booking schedule updated successfully:`, booking);
+
+    res.status(200).json({
+      success: true,
+      message: "Booking schedule updated successfully",
+      booking
+    });
+  } catch (error) {
+    console.error("❌ UPDATE EXPERT BOOKING SCHEDULE ERROR:", error);
+    res.status(500).json({
+      success: false,
+      message: error.message || "Failed to update booking schedule"
+    });
+  }
+});
+
+// ============================================
+// 7. DELETE BOOKING (Admin)
+// ============================================
+router.delete("/:id", async (req, res) => {
+  try {
+    const booking = await ExpertBooking.findByIdAndDelete(req.params.id);
+    if (!booking) {
+      return res.status(404).json({ success: false, message: "Booking not found" });
+    }
+    res.json({ success: true, message: "Booking deleted successfully" });
+  } catch (error) {
+    console.error("Error deleting booking:", error);
+    res.status(500).json({ success: false, message: error.message });
+  }
+});
+
 module.exports = router;
