@@ -1,236 +1,284 @@
 const SocialContent = require('../models/SocialContent');
+const { cloudinary } = require('../config/cloudinary');
 
-// Extract YouTube video ID from URL
-const extractYouTubeId = (url) => {
-  const regExp = /^.*(youtu.be\/|v\/|u\/\w\/|embed\/|watch\?v=|&v=)([^#&?]*).*/;
-  const match = url.match(regExp);
-  return (match && match[2].length === 11) ? match[2] : null;
-};
-
-// Extract Instagram Reel ID from URL
-const extractInstagramId = (url) => {
-  const regExp = /(?:https?:\/\/)?(?:www\.)?instagram\.com\/(?:p|reel)\/([a-zA-Z0-9_-]+)/;
-  const match = url.match(regExp);
-  return match ? match[1] : null;
-};
-
-// @desc    Get all social content
-// @route   GET /api/social-content
-// @access  Public
-const getAllContent = async (req, res) => {
-  const { type, page = 1, limit = 12 } = req.query;
-  
+// Get all social content
+const getAllSocialContent = async (req, res) => {
   try {
-    let query = { isActive: true };
-    if (type) query.type = type;
-    
-    const skip = (parseInt(page) - 1) * parseInt(limit);
-    
-    const content = await SocialContent.find(query)
+    const content = await SocialContent.find()
       .sort({ createdAt: -1 })
-      .skip(skip)
-      .limit(parseInt(limit));
-    
-    const total = await SocialContent.countDocuments(query);
+      .populate('createdBy', 'name email');
     
     res.json({
+      success: true,
       content,
-      pagination: {
-        currentPage: parseInt(page),
-        totalPages: Math.ceil(total / parseInt(limit)),
-        totalItems: total,
-        itemsPerPage: parseInt(limit),
-      },
+      count: content.length
     });
   } catch (error) {
-    console.error('Get content error:', error);
-    res.status(500).json({ msg: 'Server error', error: error.message });
+    console.error('Error fetching content:', error);
+    res.status(500).json({
+      success: false,
+      msg: 'Failed to fetch content'
+    });
   }
 };
 
-// @desc    Get content by type
-// @route   GET /api/social-content/type/:type
-// @access  Public
-const getContentByType = async (req, res) => {
-  const { type } = req.params;
-  const { page = 1, limit = 12 } = req.query;
-  
+// Get active social content (for frontend)
+const getActiveSocialContent = async (req, res) => {
   try {
-    const skip = (parseInt(page) - 1) * parseInt(limit);
-    
-    const content = await SocialContent.find({ type, isActive: true })
-      .sort({ createdAt: -1 })
-      .skip(skip)
-      .limit(parseInt(limit));
-    
-    const total = await SocialContent.countDocuments({ type, isActive: true });
+    const content = await SocialContent.find({ isActive: true })
+      .sort({ createdAt: -1 });
     
     res.json({
-      content,
-      pagination: {
-        currentPage: parseInt(page),
-        totalPages: Math.ceil(total / parseInt(limit)),
-        totalItems: total,
-        itemsPerPage: parseInt(limit),
-      },
+      success: true,
+      content
     });
   } catch (error) {
-    console.error('Get content by type error:', error);
-    res.status(500).json({ msg: 'Server error', error: error.message });
+    console.error('Error fetching active content:', error);
+    res.status(500).json({
+      success: false,
+      msg: 'Failed to fetch content'
+    });
   }
 };
 
-// @desc    Create new social content (admin)
-// @route   POST /api/social-content/admin
-// @access  Private/Admin
-const createContent = async (req, res) => {
-  const { type, title, url, description } = req.body;
-  
+// Get single social content
+const getSocialContentById = async (req, res) => {
   try {
-    let embedId = '';
+    const content = await SocialContent.findById(req.params.id);
     
-    if (type === 'youtube') {
-      embedId = extractYouTubeId(url);
-      if (!embedId) {
-        return res.status(400).json({ msg: 'Invalid YouTube URL' });
-      }
-    } else if (type === 'instagram') {
-      embedId = extractInstagramId(url);
-      if (!embedId) {
-        return res.status(400).json({ msg: 'Invalid Instagram URL' });
-      }
+    if (!content) {
+      return res.status(404).json({
+        success: false,
+        msg: 'Content not found'
+      });
     }
     
-    const content = await SocialContent.create({
+    res.json({
+      success: true,
+      content
+    });
+  } catch (error) {
+    console.error('Error fetching content:', error);
+    res.status(500).json({
+      success: false,
+      msg: 'Failed to fetch content'
+    });
+  }
+};
+
+// Create social content
+const createSocialContent = async (req, res) => {
+  try {
+    const { type, title, url, description, fileUrl, fileName, imageUrl } = req.body;
+    
+    const content = new SocialContent({
       type,
       title,
-      url,
-      embedId,
+      url: url || '',
       description: description || '',
-      postedBy: req.admin._id,
+      fileUrl: fileUrl || '',
+      fileName: fileName || '',
+      imageUrl: imageUrl || '',
+      createdBy: req.admin?._id || req.user?._id
     });
     
-    res.status(201).json({ msg: 'Content created successfully', content });
+    await content.save();
+    
+    res.status(201).json({
+      success: true,
+      msg: 'Content created successfully',
+      content
+    });
   } catch (error) {
-    console.error('Create content error:', error);
-    res.status(500).json({ msg: 'Server error', error: error.message });
+    console.error('Error creating content:', error);
+    res.status(500).json({
+      success: false,
+      msg: 'Failed to create content'
+    });
   }
 };
 
-// @desc    Update social content (admin)
-// @route   PUT /api/social-content/admin/:id
-// @access  Private/Admin
-const updateContent = async (req, res) => {
-  const { id } = req.params;
-  const { title, url, description, isActive } = req.body;
-  
+// Upload file (Word document or image)
+const uploadFile = async (req, res) => {
   try {
-    const content = await SocialContent.findById(id);
-    if (!content) {
-      return res.status(404).json({ msg: 'Content not found' });
+    if (!req.file) {
+      return res.status(400).json({
+        success: false,
+        msg: 'No file uploaded'
+      });
     }
     
-    if (title) content.title = title;
-    if (description !== undefined) content.description = description;
-    if (isActive !== undefined) content.isActive = isActive;
+    // Get file URL from Cloudinary
+    let fileUrl = req.file.path;
     
-    if (url && url !== content.url) {
-      let embedId = '';
-      if (content.type === 'youtube') {
-        embedId = extractYouTubeId(url);
-        if (!embedId) {
-          return res.status(400).json({ msg: 'Invalid YouTube URL' });
-        }
-      } else if (content.type === 'instagram') {
-        embedId = extractInstagramId(url);
-        if (!embedId) {
-          return res.status(400).json({ msg: 'Invalid Instagram URL' });
-        }
+    // For Cloudinary, you might want to use secure_url
+    if (req.file.secure_url) {
+      fileUrl = req.file.secure_url;
+    }
+    
+    res.json({
+      success: true,
+      fileUrl: fileUrl,
+      fileName: req.file.originalname,
+      fileSize: req.file.size,
+      mimetype: req.file.mimetype
+    });
+  } catch (error) {
+    console.error('Error uploading file:', error);
+    res.status(500).json({
+      success: false,
+      msg: 'Failed to upload file'
+    });
+  }
+};
+
+// Update social content
+const updateSocialContent = async (req, res) => {
+  try {
+    const { id } = req.params;
+    const updates = req.body;
+    
+    const content = await SocialContent.findById(id);
+    
+    if (!content) {
+      return res.status(404).json({
+        success: false,
+        msg: 'Content not found'
+      });
+    }
+    
+    // Update fields
+    Object.keys(updates).forEach(key => {
+      if (updates[key] !== undefined) {
+        content[key] = updates[key];
       }
-      content.url = url;
-      content.embedId = embedId;
-    }
+    });
     
     await content.save();
     
-    res.json({ msg: 'Content updated successfully', content });
+    res.json({
+      success: true,
+      msg: 'Content updated successfully',
+      content
+    });
   } catch (error) {
-    console.error('Update content error:', error);
-    res.status(500).json({ msg: 'Server error', error: error.message });
+    console.error('Error updating content:', error);
+    res.status(500).json({
+      success: false,
+      msg: 'Failed to update content'
+    });
   }
 };
 
-// @desc    Delete social content (admin)
-// @route   DELETE /api/social-content/admin/:id
-// @access  Private/Admin
-const deleteContent = async (req, res) => {
-  const { id } = req.params;
-  
+// Delete social content
+const deleteSocialContent = async (req, res) => {
   try {
+    const { id } = req.params;
     const content = await SocialContent.findById(id);
+    
     if (!content) {
-      return res.status(404).json({ msg: 'Content not found' });
+      return res.status(404).json({
+        success: false,
+        msg: 'Content not found'
+      });
     }
     
-    await content.deleteOne();
-    
-    res.json({ msg: 'Content deleted successfully' });
-  } catch (error) {
-    console.error('Delete content error:', error);
-    res.status(500).json({ msg: 'Server error', error: error.message });
-  }
-};
-
-// @desc    Increment view count
-// @route   PUT /api/social-content/:id/view
-// @access  Public
-const incrementViews = async (req, res) => {
-  const { id } = req.params;
-  
-  try {
-    const content = await SocialContent.findById(id);
-    if (!content) {
-      return res.status(404).json({ msg: 'Content not found' });
+    // Delete file from Cloudinary if exists
+    if (content.fileUrl) {
+      try {
+        const publicId = content.fileUrl.split('/').pop().split('.')[0];
+        await cloudinary.uploader.destroy(`social-content/blogs/${publicId}`, {
+          resource_type: 'raw'
+        });
+      } catch (err) {
+        console.error('Error deleting file:', err);
+      }
     }
     
-    content.views += 1;
-    await content.save();
+    // Delete image from Cloudinary if exists
+    if (content.imageUrl) {
+      try {
+        const publicId = content.imageUrl.split('/').pop().split('.')[0];
+        await cloudinary.uploader.destroy(`social-content/gallery/${publicId}`);
+      } catch (err) {
+        console.error('Error deleting image:', err);
+      }
+    }
     
-    res.json({ msg: 'View counted' });
+    await SocialContent.findByIdAndDelete(id);
+    
+    res.json({
+      success: true,
+      msg: 'Content deleted successfully'
+    });
   } catch (error) {
-    console.error('Increment views error:', error);
-    res.status(500).json({ msg: 'Server error', error: error.message });
+    console.error('Error deleting content:', error);
+    res.status(500).json({
+      success: false,
+      msg: 'Failed to delete content'
+    });
   }
 };
 
-// @desc    Increment like count
-// @route   PUT /api/social-content/:id/like
-// @access  Public
-const incrementLikes = async (req, res) => {
-  const { id } = req.params;
-  
+// Increment view count
+const incrementViewCount = async (req, res) => {
   try {
+    const { id } = req.params;
+    await SocialContent.findByIdAndUpdate(id, {
+      $inc: { views: 1 }
+    });
+    
+    res.json({
+      success: true,
+      msg: 'View count updated'
+    });
+  } catch (error) {
+    console.error('Error updating view count:', error);
+    res.status(500).json({
+      success: false,
+      msg: 'Failed to update view count'
+    });
+  }
+};
+
+// Toggle like
+const toggleLike = async (req, res) => {
+  try {
+    const { id } = req.params;
     const content = await SocialContent.findById(id);
+    
     if (!content) {
-      return res.status(404).json({ msg: 'Content not found' });
+      return res.status(404).json({
+        success: false,
+        msg: 'Content not found'
+      });
     }
     
     content.likes += 1;
     await content.save();
     
-    res.json({ msg: 'Liked', likes: content.likes });
+    res.json({
+      success: true,
+      likes: content.likes,
+      msg: 'Liked successfully'
+    });
   } catch (error) {
-    console.error('Increment likes error:', error);
-    res.status(500).json({ msg: 'Server error', error: error.message });
+    console.error('Error toggling like:', error);
+    res.status(500).json({
+      success: false,
+      msg: 'Failed to update like'
+    });
   }
 };
 
 module.exports = {
-  getAllContent,
-  getContentByType,
-  createContent,
-  updateContent,
-  deleteContent,
-  incrementViews,
-  incrementLikes,
+  getAllSocialContent,
+  getActiveSocialContent,
+  getSocialContentById,
+  createSocialContent,
+  uploadFile,
+  updateSocialContent,
+  deleteSocialContent,
+  incrementViewCount,
+  toggleLike
 };
