@@ -1,4 +1,3 @@
-// controllers/planPaymentController.js
 const Razorpay = require("razorpay");
 const crypto = require("crypto");
 const mongoose = require("mongoose");
@@ -12,12 +11,12 @@ const razorpay = new Razorpay({
     key_secret: process.env.RAZORPAY_KEY_SECRET,
 });
 
-// CREATE ORDER
-// controllers/planPaymentController.js - createOrder function
-
+// ============================================
+// 1. CREATE ORDER
+// ============================================
 const createOrder = async (req, res) => {
     try {
-        const { planId, userName, userEmail, userPhone } = req.body;  // ✅ Phone number receive karein
+        const { planId, userName, userEmail, userPhone } = req.body;
 
         if (!planId) {
             return res.status(400).json({
@@ -33,7 +32,6 @@ const createOrder = async (req, res) => {
             });
         }
 
-        // Get plan details
         const plan = await Plan.findById(planId);
         if (!plan) {
             return res.status(404).json({
@@ -42,7 +40,6 @@ const createOrder = async (req, res) => {
             });
         }
 
-        // Get user details from database
         const user = await User.findById(req.user._id);
         if (!user) {
             return res.status(404).json({
@@ -64,12 +61,12 @@ const createOrder = async (req, res) => {
         const endDate = new Date();
         endDate.setDate(endDate.getDate() + (plan.durationDays || 30));
 
-        // ✅ Phone number ke saath subscription create karein
+        // ✅ CREATE with both status and classStatus
         const subscription = await PlanSubscription.create({
             userId: req.user._id,
             userName: userName || user.name || user.fullName || "User",
             userEmail: userEmail || user.email,
-            userPhone: userPhone || user.phone || "",  // ✅ Phone number save hoga
+            userPhone: userPhone || user.phone || "",
             planId: plan._id,
             planName: plan.name,
             amount,
@@ -81,7 +78,8 @@ const createOrder = async (req, res) => {
             sessionsUsed: 0,
             startDate: new Date(),
             endDate,
-            status: "pending",
+            status: "pending",              // ✅ Payment status
+            classStatus: "scheduled",       // ✅ Class status - NEW
             razorpayOrderId: order.id,
         });
 
@@ -102,9 +100,9 @@ const createOrder = async (req, res) => {
     }
 };
 
-// VERIFY PAYMENT
-// controllers/planPaymentController.js - verifyPayment function
-
+// ============================================
+// 2. VERIFY PAYMENT
+// ============================================
 const verifyPayment = async (req, res) => {
     try {
         const {
@@ -115,7 +113,7 @@ const verifyPayment = async (req, res) => {
             preferredDate,
             preferredTime,
             message,
-            userPhone,  // ✅ Phone number receive karein
+            userPhone,
         } = req.body;
 
         const generated_signature = crypto
@@ -138,12 +136,10 @@ const verifyPayment = async (req, res) => {
             });
         }
 
-        // ✅ Phone number update karein agar nahi hai toh
         if (userPhone && !subscription.userPhone) {
             subscription.userPhone = userPhone;
         }
 
-        // Update session details
         if (preferredDate) {
             subscription.preferredDate = new Date(preferredDate);
         }
@@ -154,16 +150,15 @@ const verifyPayment = async (req, res) => {
             subscription.message = message;
         }
 
+        // ✅ Update payment status only (classStatus remains "scheduled")
         subscription.status = "active";
         subscription.razorpayPaymentId = razorpay_payment_id;
         subscription.razorpaySignature = razorpay_signature;
         await subscription.save();
 
-        // Get user with complete details
         const user = await User.findById(subscription.userId);
         const plan = await Plan.findById(subscription.planId);
 
-        // Send email to user and admin
         await sendPlanPurchaseEmail(user, subscription, plan);
 
         res.status(200).json({
@@ -175,10 +170,11 @@ const verifyPayment = async (req, res) => {
                 amount: subscription.amount,
                 userName: subscription.userName,
                 userEmail: subscription.userEmail,
-                userPhone: subscription.userPhone,  // ✅ Phone number response mein
+                userPhone: subscription.userPhone,
                 startDate: subscription.startDate,
                 endDate: subscription.endDate,
-                status: subscription.status,
+                status: subscription.status,          // ✅ Payment status
+                classStatus: subscription.classStatus, // ✅ Class status
             },
         });
     } catch (error) {
@@ -190,7 +186,9 @@ const verifyPayment = async (req, res) => {
     }
 };
 
-// GET USER SUBSCRIPTIONS
+// ============================================
+// 3. GET USER SUBSCRIPTIONS
+// ============================================
 const getUserSubscriptions = async (req, res) => {
     try {
         const subscriptions = await PlanSubscription.find({
@@ -210,9 +208,9 @@ const getUserSubscriptions = async (req, res) => {
     }
 };
 
-// controllers/planPaymentController.js
-
-// GET ALL SUBSCRIPTIONS (PUBLIC - For Admin Panel)
+// ============================================
+// 4. GET ALL SUBSCRIPTIONS (Admin)
+// ============================================
 const getAllSubscriptions = async (req, res) => {
     try {
         const subscriptions = await PlanSubscription.find()
@@ -234,7 +232,9 @@ const getAllSubscriptions = async (req, res) => {
     }
 };
 
-// UPDATE MEET LINK
+// ============================================
+// 5. UPDATE MEET LINK
+// ============================================
 const updateMeetLink = async (req, res) => {
     try {
         const { meetLink } = req.body;
@@ -266,16 +266,29 @@ const updateMeetLink = async (req, res) => {
     }
 };
 
-// UPDATE SUBSCRIPTION DETAILS (for admin to add name/email if missing)
+// ============================================
+// 6. UPDATE SUBSCRIPTION DETAILS (Admin)
+// ============================================
 const updateSubscriptionDetails = async (req, res) => {
     try {
         const { id } = req.params;
-        const { userName, userEmail, userPhone } = req.body;
+        const { userName, userEmail, userPhone, preferredDate, preferredTime, meetLink, status, classStatus } = req.body;
+
+        const updateData = {};
+        if (userName !== undefined) updateData.userName = userName;
+        if (userEmail !== undefined) updateData.userEmail = userEmail;
+        if (userPhone !== undefined) updateData.userPhone = userPhone;
+        if (preferredDate) updateData.preferredDate = new Date(preferredDate);
+        if (preferredTime) updateData.preferredTime = preferredTime;
+        if (meetLink !== undefined) updateData.meetLink = meetLink;
+        if (status) updateData.status = status;           // ✅ Payment status
+        if (classStatus) updateData.classStatus = classStatus; // ✅ Class status
+        updateData.updatedAt = new Date();
 
         const subscription = await PlanSubscription.findByIdAndUpdate(
             id,
-            { userName, userEmail, userPhone },
-            { new: true }
+            updateData,
+            { new: true, runValidators: true }
         );
 
         if (!subscription) {
@@ -299,6 +312,182 @@ const updateSubscriptionDetails = async (req, res) => {
     }
 };
 
+// ============================================
+// 7. UPDATE PLAN SCHEDULE (Admin) - UPDATED
+// ============================================
+const updateSchedule = async (req, res) => {
+    try {
+        const { id } = req.params;
+        const { meetLink, preferredDate, preferredTime, classStatus } = req.body; // ✅ Removed 'status'
+
+        console.log(`🔄 Updating plan schedule for ${id}:`, { meetLink, preferredDate, preferredTime, classStatus });
+
+        const updateData = {};
+        if (meetLink !== undefined) updateData.meetLink = meetLink;
+        if (preferredDate) updateData.preferredDate = new Date(preferredDate);
+        if (preferredTime) updateData.preferredTime = preferredTime;
+        if (classStatus) updateData.classStatus = classStatus; // ✅ Only class status
+        updateData.updatedAt = new Date();
+
+        const subscription = await PlanSubscription.findByIdAndUpdate(
+            id,
+            updateData,
+            { new: true, runValidators: true }
+        );
+
+        if (!subscription) {
+            return res.status(404).json({
+                success: false,
+                message: "Subscription not found",
+            });
+        }
+
+        console.log(`✅ Plan schedule updated successfully:`, subscription);
+
+        res.status(200).json({
+            success: true,
+            message: "Plan schedule updated successfully",
+            subscription,
+        });
+    } catch (error) {
+        console.log("❌ UPDATE PLAN SCHEDULE ERROR:", error);
+        res.status(500).json({
+            success: false,
+            message: error.message || "Failed to update plan schedule",
+        });
+    }
+};
+
+// ============================================
+// 8. UPDATE PLAN CLASS STATUS (Admin) - NEW
+// ============================================
+const updateClassStatus = async (req, res) => {
+    try {
+        const { id } = req.params;
+        const { classStatus } = req.body;
+
+        if (!classStatus) {
+            return res.status(400).json({
+                success: false,
+                message: "Class status is required",
+            });
+        }
+
+        const validClassStatuses = ["upcoming", "ongoing", "completed", "cancelled", "scheduled"];
+        if (!validClassStatuses.includes(classStatus)) {
+            return res.status(400).json({
+                success: false,
+                message: "Invalid class status. Allowed: upcoming, ongoing, completed, cancelled, scheduled",
+            });
+        }
+
+        const subscription = await PlanSubscription.findByIdAndUpdate(
+            id,
+            { 
+                classStatus,
+                updatedAt: new Date()
+            },
+            { new: true, runValidators: true }
+        );
+
+        if (!subscription) {
+            return res.status(404).json({
+                success: false,
+                message: "Subscription not found",
+            });
+        }
+
+        res.status(200).json({
+            success: true,
+            message: `Class status updated to ${classStatus} successfully`,
+            subscription,
+        });
+    } catch (error) {
+        console.log("UPDATE CLASS STATUS ERROR =>", error);
+        res.status(500).json({
+            success: false,
+            message: "Failed to update class status",
+        });
+    }
+};
+
+// ============================================
+// 9. UPDATE PLAN PAYMENT STATUS (Admin)
+// ============================================
+const updatePlanStatus = async (req, res) => {
+    try {
+        const { id } = req.params;
+        const { status } = req.body;
+
+        if (!status) {
+            return res.status(400).json({
+                success: false,
+                message: "Status is required",
+            });
+        }
+
+        const validStatuses = ["pending", "active", "expired", "cancelled"];
+        if (!validStatuses.includes(status)) {
+            return res.status(400).json({
+                success: false,
+                message: "Invalid status. Allowed: pending, active, expired, cancelled",
+            });
+        }
+
+        // ✅ Check if transition is valid
+        const subscription = await PlanSubscription.findById(id);
+        if (!subscription) {
+            return res.status(404).json({
+                success: false,
+                message: "Subscription not found",
+            });
+        }
+
+        const currentStatus = subscription.status;
+        
+        // ✅ Valid transitions for payment status
+        const validTransitions = {
+            'pending': ['active', 'cancelled'],
+            'active': ['expired', 'cancelled'],
+            'expired': [],      // ❌ Cannot change
+            'cancelled': []     // ❌ Cannot change
+        };
+
+        if (!validTransitions[currentStatus]?.includes(status)) {
+            return res.status(400).json({
+                success: false,
+                message: `Cannot change payment status from "${currentStatus}" to "${status}"`,
+                allowedTransitions: validTransitions[currentStatus] || []
+            });
+        }
+
+        const updated = await PlanSubscription.findByIdAndUpdate(
+            id,
+            { 
+                status, 
+                updatedAt: new Date(),
+                ...(status === 'cancelled' ? { cancelledAt: new Date() } : {})
+            },
+            { new: true, runValidators: true }
+        );
+
+        res.status(200).json({
+            success: true,
+            message: `Plan payment status updated to ${status} successfully`,
+            subscription: updated,
+        });
+    } catch (error) {
+        console.log("UPDATE PLAN STATUS ERROR =>", error);
+        res.status(500).json({
+            success: false,
+            message: "Failed to update plan status",
+        });
+    }
+};
+
+// ============================================
+// EXPORT ALL FUNCTIONS
+// ============================================
 module.exports = {
     createOrder,
     verifyPayment,
@@ -306,4 +495,7 @@ module.exports = {
     getAllSubscriptions,
     updateMeetLink,
     updateSubscriptionDetails,
+    updateSchedule,
+    updateClassStatus,  // ✅ NEW
+    updatePlanStatus,
 };
