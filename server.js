@@ -171,6 +171,13 @@ app.use("/api/expert-bookings", require('./routes/expertBookingRoutes'));
 app.use("/api/admindashboard", require('./routes/adminDashboardRoutes'));
 app.use("/api/plans", require('./routes/planRoutes'));
 app.use("/api/planpayments", require('./routes/planPaymentRoutes'));
+app.use("/api/astrology", require('./routes/astrologyRoutes'));
+app.use("/api/kundlipayments", require('./routes/kundliPaymentRoutes'));
+app.use("/api/social-content", require('./routes/socialContentRoutes'));
+app.use('/api/classes', require('./routes/classesRoutes'));
+app.use('/api/rashifal', require('./routes/rashiFalRoutes'));
+
+
 
 
 /* ================================
