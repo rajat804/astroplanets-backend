@@ -1,16 +1,21 @@
 const express = require('express');
 const router = express.Router();
-const { 
-  uploadSingleImage, 
-  uploadMultipleImages, 
-  deleteImage,
-  upload 
-} = require('../controllers/uploadController');
 const { protectAdmin } = require('../middleware/adminAuth');
+const {
+  uploadImage,
+  uploadDocument,
+  uploadSingleImage,
+  uploadMultipleImages,
+  uploadSingleDocument,
+  deleteImage
+} = require('../controllers/uploadController');
 
-// Admin only routes
-router.post('/single', protectAdmin, upload.single('image'), uploadSingleImage);
-router.post('/multiple', protectAdmin, upload.array('images', 10), uploadMultipleImages);
+// Image upload routes
+router.post('/single', protectAdmin, uploadImage.single('image'), uploadSingleImage);
+router.post('/multiple', protectAdmin, uploadImage.array('images', 10), uploadMultipleImages);
 router.delete('/image', protectAdmin, deleteImage);
+
+// Document upload route (for Word files)
+router.post('/document', protectAdmin, uploadDocument.single('file'), uploadSingleDocument);
 
 module.exports = router;
