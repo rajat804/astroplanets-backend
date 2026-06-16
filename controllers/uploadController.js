@@ -1,44 +1,22 @@
-const cloudinary = require('../config/cloudinary');
+const { cloudinary, uploadImage, uploadDocument } = require('../config/cloudinary');
 const multer = require('multer');
-const { CloudinaryStorage } = require('multer-storage-cloudinary');
-
-// Configure multer storage with Cloudinary
-const storage = new CloudinaryStorage({
-  cloudinary: cloudinary,
-  params: {
-    folder: 'astroplanets/products',
-    allowed_formats: ['jpg', 'png', 'jpeg', 'webp'],
-    transformation: [{ width: 800, height: 800, crop: 'limit' }]
-  },
-});
-
-const upload = multer({ 
-  storage: storage,
-  limits: { fileSize: 5 * 1024 * 1024 }, // 5MB limit
-  fileFilter: (req, file, cb) => {
-    if (file.mimetype.startsWith('image/')) {
-      cb(null, true);
-    } else {
-      cb(new Error('Only images are allowed'), false);
-    }
-  }
-});
 
 // Upload single image
 const uploadSingleImage = async (req, res) => {
   try {
     if (!req.file) {
-      return res.status(400).json({ msg: 'No file uploaded' });
+      return res.status(400).json({ success: false, msg: 'No file uploaded' });
     }
     
     res.json({
+      success: true,
       msg: 'Image uploaded successfully',
-      url: req.file.path,
+      imageUrl: req.file.path,
       publicId: req.file.filename
     });
   } catch (error) {
     console.error('Upload error:', error);
-    res.status(500).json({ msg: 'Upload failed', error: error.message });
+    res.status(500).json({ success: false, msg: 'Upload failed', error: error.message });
   }
 };
 
@@ -46,7 +24,7 @@ const uploadSingleImage = async (req, res) => {
 const uploadMultipleImages = async (req, res) => {
   try {
     if (!req.files || req.files.length === 0) {
-      return res.status(400).json({ msg: 'No files uploaded' });
+      return res.status(400).json({ success: false, msg: 'No files uploaded' });
     }
     
     const images = req.files.map(file => ({
@@ -55,12 +33,33 @@ const uploadMultipleImages = async (req, res) => {
     }));
     
     res.json({
+      success: true,
       msg: 'Images uploaded successfully',
       images: images
     });
   } catch (error) {
     console.error('Upload error:', error);
-    res.status(500).json({ msg: 'Upload failed', error: error.message });
+    res.status(500).json({ success: false, msg: 'Upload failed', error: error.message });
+  }
+};
+
+// Upload single document (Word file)
+const uploadSingleDocument = async (req, res) => {
+  try {
+    if (!req.file) {
+      return res.status(400).json({ success: false, msg: 'No file uploaded' });
+    }
+    
+    res.json({
+      success: true,
+      msg: 'Document uploaded successfully',
+      fileUrl: req.file.path,
+      fileName: req.file.originalname,
+      publicId: req.file.filename
+    });
+  } catch (error) {
+    console.error('Upload error:', error);
+    res.status(500).json({ success: false, msg: 'Upload failed', error: error.message });
   }
 };
 
@@ -70,21 +69,23 @@ const deleteImage = async (req, res) => {
     const { publicId } = req.body;
     
     if (!publicId) {
-      return res.status(400).json({ msg: 'Public ID is required' });
+      return res.status(400).json({ success: false, msg: 'Public ID is required' });
     }
     
     await cloudinary.uploader.destroy(publicId);
     
-    res.json({ msg: 'Image deleted successfully' });
+    res.json({ success: true, msg: 'Image deleted successfully' });
   } catch (error) {
     console.error('Delete error:', error);
-    res.status(500).json({ msg: 'Delete failed', error: error.message });
+    res.status(500).json({ success: false, msg: 'Delete failed', error: error.message });
   }
 };
 
 module.exports = {
   uploadSingleImage,
   uploadMultipleImages,
+  uploadSingleDocument,
   deleteImage,
-  upload
+  uploadImage,
+  uploadDocument
 };
