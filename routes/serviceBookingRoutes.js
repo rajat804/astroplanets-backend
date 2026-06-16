@@ -173,7 +173,9 @@ const sendBookingEmails = async (bookingData, service, paymentId) => {
   await transporter.sendMail(customerMailOptions);
 };
 
-// CREATE ORDER (with dynamic service details)
+// ============================================
+// 1. CREATE ORDER
+// ============================================
 router.post("/create-order", async (req, res) => {
   try {
     const { serviceId, userId, userEmail, userName, amount } = req.body;
@@ -221,7 +223,9 @@ router.post("/create-order", async (req, res) => {
   }
 });
 
-// VERIFY PAYMENT AND CREATE BOOKING (Save all fields from model)
+// ============================================
+// 2. VERIFY PAYMENT AND CREATE BOOKING
+// ============================================
 router.post("/verify-payment", async (req, res) => {
   try {
     const {
@@ -256,7 +260,7 @@ router.post("/verify-payment", async (req, res) => {
       return res.status(404).json({ success: false, message: "Service not found" });
     }
 
-    // Create booking record with ALL fields from the model
+    // ✅ Create booking with both status and classStatus
     const booking = new ServiceBooking({
       serviceId,
       serviceTitle: service.title,
@@ -274,7 +278,8 @@ router.post("/verify-payment", async (req, res) => {
       preferredTime,
       message: message || "",
       amount,
-      status: "confirmed",
+      status: "confirmed",           // ✅ Payment status
+      classStatus: "scheduled",      // ✅ Class status - NEW
       paymentId: razorpay_payment_id,
       meetLink: "",
       notes: ""
@@ -305,18 +310,9 @@ router.post("/verify-payment", async (req, res) => {
   }
 });
 
-// GET all bookings for a user
-router.get("/user/:userId", async (req, res) => {
-  try {
-    const bookings = await ServiceBooking.find({ userId: req.params.userId }).sort({ createdAt: -1 });
-    res.json({ success: true, bookings });
-  } catch (error) {
-    console.error("Error fetching bookings:", error);
-    res.status(500).json({ success: false, message: error.message });
-  }
-});
-
-// GET all bookings (admin)
+// ============================================
+// 3. GET ALL BOOKINGS (Admin)
+// ============================================
 router.get("/all", async (req, res) => {
   try {
     const bookings = await ServiceBooking.find().sort({ createdAt: -1 });
@@ -327,7 +323,22 @@ router.get("/all", async (req, res) => {
   }
 });
 
-// GET bookings by service title key (palmistry, vastu, numerology, yoga)
+// ============================================
+// 4. GET USER BOOKINGS
+// ============================================
+router.get("/user/:userId", async (req, res) => {
+  try {
+    const bookings = await ServiceBooking.find({ userId: req.params.userId }).sort({ createdAt: -1 });
+    res.json({ success: true, bookings });
+  } catch (error) {
+    console.error("Error fetching bookings:", error);
+    res.status(500).json({ success: false, message: error.message });
+  }
+});
+
+// ============================================
+// 5. GET BOOKINGS BY SERVICE TITLE KEY
+// ============================================
 router.get("/by-title/:titleKey", async (req, res) => {
   try {
     const { titleKey } = req.params;
@@ -341,7 +352,9 @@ router.get("/by-title/:titleKey", async (req, res) => {
   }
 });
 
-// GET bookings by category
+// ============================================
+// 6. GET BOOKINGS BY CATEGORY
+// ============================================
 router.get("/by-category/:category", async (req, res) => {
   try {
     const { category } = req.params;
@@ -355,7 +368,9 @@ router.get("/by-category/:category", async (req, res) => {
   }
 });
 
-// GET CONFIRMED SERVICE BOOKINGS ONLY
+// ============================================
+// 7. GET CONFIRMED SERVICE BOOKINGS ONLY
+// ============================================
 router.get("/confirmed", async (req, res) => {
   try {
     const bookings = await ServiceBooking.find({ 
@@ -368,7 +383,9 @@ router.get("/confirmed", async (req, res) => {
   }
 });
 
-// GET CONFIRMED SERVICE BOOKINGS BY USER
+// ============================================
+// 8. GET USER CONFIRMED BOOKINGS
+// ============================================
 router.get("/user/:userId/confirmed", async (req, res) => {
   try {
     const bookings = await ServiceBooking.find({ 
@@ -382,13 +399,15 @@ router.get("/user/:userId/confirmed", async (req, res) => {
   }
 });
 
-// UPDATE SERVICE MEET LINK
+// ============================================
+// 9. UPDATE MEET LINK
+// ============================================
 router.put("/update-meet-link/:id", async (req, res) => {
   try {
     const { meetLink } = req.body;
     const booking = await ServiceBooking.findByIdAndUpdate(
       req.params.id,
-      { meetLink },
+      { meetLink, updatedAt: new Date() },
       { new: true }
     );
     if (!booking) {
@@ -401,7 +420,9 @@ router.put("/update-meet-link/:id", async (req, res) => {
   }
 });
 
-// UPDATE BOOKING STATUS
+// ============================================
+// 10. UPDATE PAYMENT STATUS (Admin)
+// ============================================
 router.put("/update-status/:id", async (req, res) => {
   try {
     const { status } = req.body;
@@ -410,10 +431,63 @@ router.put("/update-status/:id", async (req, res) => {
     if (!validStatuses.includes(status)) {
       return res.status(400).json({ success: false, message: "Invalid status" });
     }
+
+    // ✅ Check if transition is valid
+    const booking = await ServiceBooking.findById(req.params.id);
+    if (!booking) {
+      return res.status(404).json({ success: false, message: "Booking not found" });
+    }
+
+    const currentStatus = booking.status;
+    
+    // ✅ Valid transitions for payment status
+    const validTransitions = {
+      'pending': ['confirmed', 'cancelled'],
+      'confirmed': ['completed', 'cancelled'],
+      'completed': [],      // ❌ Cannot change
+      'cancelled': []       // ❌ Cannot change
+    };
+
+    if (!validTransitions[currentStatus]?.includes(status)) {
+      return res.status(400).json({
+        success: false,
+        message: `Cannot change payment status from "${currentStatus}" to "${status}"`,
+        allowedTransitions: validTransitions[currentStatus] || []
+      });
+    }
+    
+    const updatedBooking = await ServiceBooking.findByIdAndUpdate(
+      req.params.id,
+      { status, updatedAt: new Date() },
+      { new: true }
+    );
+    
+    res.json({ success: true, booking: updatedBooking, message: `Booking status updated to ${status}` });
+  } catch (error) {
+    console.error("Error updating booking status:", error);
+    res.status(500).json({ success: false, message: error.message });
+  }
+});
+
+// ============================================
+// 11. UPDATE CLASS STATUS (Admin) - NEW
+// ============================================
+router.put("/update-class-status/:id", async (req, res) => {
+  try {
+    const { classStatus } = req.body;
+    
+    // ✅ Validate class status
+    const validClassStatuses = ["upcoming", "ongoing", "completed", "cancelled", "scheduled"];
+    if (!validClassStatuses.includes(classStatus)) {
+      return res.status(400).json({
+        success: false,
+        message: "Invalid class status. Allowed: upcoming, ongoing, completed, cancelled, scheduled"
+      });
+    }
     
     const booking = await ServiceBooking.findByIdAndUpdate(
       req.params.id,
-      { status },
+      { classStatus, updatedAt: new Date() },
       { new: true }
     );
     
@@ -421,20 +495,68 @@ router.put("/update-status/:id", async (req, res) => {
       return res.status(404).json({ success: false, message: "Booking not found" });
     }
     
-    res.json({ success: true, booking, message: `Booking status updated to ${status}` });
+    res.json({ success: true, booking, message: `Class status updated to ${classStatus}` });
   } catch (error) {
-    console.error("Error updating booking status:", error);
+    console.error("Error updating class status:", error);
     res.status(500).json({ success: false, message: error.message });
   }
 });
 
-// UPDATE NOTES
+// ============================================
+// 12. UPDATE SCHEDULE (Admin) - NEW
+// ============================================
+router.put("/admin/update-schedule/:id", async (req, res) => {
+  try {
+    const { id } = req.params;
+    const { meetLink, preferredDate, preferredTime, classStatus } = req.body;
+
+    console.log(`🔄 Updating service booking schedule for ${id}:`, { meetLink, preferredDate, preferredTime, classStatus });
+
+    const updateData = {};
+    if (meetLink !== undefined) updateData.meetLink = meetLink;
+    if (preferredDate) updateData.preferredDate = preferredDate;
+    if (preferredTime) updateData.preferredTime = preferredTime;
+    if (classStatus) updateData.classStatus = classStatus;
+    updateData.updatedAt = new Date();
+
+    const booking = await ServiceBooking.findByIdAndUpdate(
+      id,
+      updateData,
+      { new: true, runValidators: true }
+    );
+
+    if (!booking) {
+      return res.status(404).json({
+        success: false,
+        message: "Booking not found"
+      });
+    }
+
+    console.log(`✅ Service booking schedule updated successfully:`, booking);
+
+    res.status(200).json({
+      success: true,
+      message: "Booking schedule updated successfully",
+      booking
+    });
+  } catch (error) {
+    console.error("❌ UPDATE SERVICE BOOKING SCHEDULE ERROR:", error);
+    res.status(500).json({
+      success: false,
+      message: error.message || "Failed to update booking schedule"
+    });
+  }
+});
+
+// ============================================
+// 13. UPDATE NOTES
+// ============================================
 router.put("/update-notes/:id", async (req, res) => {
   try {
     const { notes } = req.body;
     const booking = await ServiceBooking.findByIdAndUpdate(
       req.params.id,
-      { notes },
+      { notes, updatedAt: new Date() },
       { new: true }
     );
     if (!booking) {
@@ -447,7 +569,9 @@ router.put("/update-notes/:id", async (req, res) => {
   }
 });
 
-// GET BOOKING STATISTICS (Admin)
+// ============================================
+// 14. GET BOOKING STATISTICS (Admin)
+// ============================================
 router.get("/admin/stats", async (req, res) => {
   try {
     const total = await ServiceBooking.countDocuments();
@@ -461,6 +585,12 @@ router.get("/admin/stats", async (req, res) => {
     const vastuBookings = await ServiceBooking.countDocuments({ serviceTitleKey: "vastu" });
     const numerologyBookings = await ServiceBooking.countDocuments({ serviceTitleKey: "numerology" });
     const yogaBookings = await ServiceBooking.countDocuments({ serviceTitleKey: "yoga" });
+    
+    // Stats by class status
+    const upcoming = await ServiceBooking.countDocuments({ classStatus: "upcoming" });
+    const ongoing = await ServiceBooking.countDocuments({ classStatus: "ongoing" });
+    const classCompleted = await ServiceBooking.countDocuments({ classStatus: "completed" });
+    const scheduled = await ServiceBooking.countDocuments({ classStatus: "scheduled" });
     
     // Total revenue
     const allBookings = await ServiceBooking.find({ status: { $in: ["confirmed", "completed"] } });
@@ -479,6 +609,12 @@ router.get("/admin/stats", async (req, res) => {
           vastu: vastuBookings,
           numerology: numerologyBookings,
           yoga: yogaBookings
+        },
+        byClassStatus: {
+          upcoming,
+          ongoing,
+          completed: classCompleted,
+          scheduled
         },
         totalRevenue,
         averageOrderValue: total > 0 ? totalRevenue / total : 0
