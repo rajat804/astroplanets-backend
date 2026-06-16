@@ -74,6 +74,11 @@ const planSubscriptionSchema = new mongoose.Schema({
     enum: ["pending", "active", "expired", "cancelled"],
     default: "pending",
   },
+    classStatus: {
+    type: String,
+    enum: ["upcoming", "ongoing", "completed", "cancelled", "scheduled"],
+    default: "scheduled",
+  },
   meetLink: {
     type: String,
     default: "",
@@ -121,6 +126,7 @@ const planSubscriptionSchema = new mongoose.Schema({
 planSubscriptionSchema.index({ userId: 1 });
 planSubscriptionSchema.index({ userEmail: 1 });
 planSubscriptionSchema.index({ status: 1 });
+planSubscriptionSchema.index({ classStatus: 1 });
 planSubscriptionSchema.index({ endDate: 1 });
 
 module.exports = mongoose.model("PlanSubscription", planSubscriptionSchema);
