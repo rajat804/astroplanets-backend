@@ -36,6 +36,15 @@ const userSchema = new mongoose.Schema(
       enum: ['user', 'admin'],
       default: 'user',
     },
+    savedCharts: [{
+    birthDetails: {
+      date: Number, month: Number, year: Number,
+      hour: Number, minute: Number, latitude: Number, longitude: Number, timezone: Number
+    },
+    kundliData: Object,
+    panchangData: Object,
+    createdAt: { type: Date, default: Date.now }
+  }],
   },
   {
     timestamps: true,
