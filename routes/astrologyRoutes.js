@@ -6,12 +6,15 @@ const User = require('../models/User');
 
 // ✅ Correct API Base URL
 const API_BASE = 'https://json.astrologyapi.com/v1';
-const ACCESS_TOKEN = process.env.ASTRO_ACCESS_TOKEN;
+const ACCESS_TOKEN = process.env.ASTRO_ACCESS_TOKEN || process.env.ASTRO_API_KEY;
 
 console.log('=================================');
 console.log('🔥 AstrologyAPI Configuration');
-console.log('Access Token:', ACCESS_TOKEN ? '✅ Set' : '❌ Missing');
-console.log('Base URL :', API_BASE);
+console.log('ASTRO_USER_ID:', process.env.ASTRO_USER_ID ? '✅ Set' : '❌ Missing');
+console.log('ASTRO_API_KEY:', process.env.ASTRO_API_KEY ? '✅ Set' : '❌ Missing');
+console.log('ASTRO_ACCESS_TOKEN:', ACCESS_TOKEN ? '✅ Set' : '❌ Missing');
+console.log('Token preview:', ACCESS_TOKEN ? ACCESS_TOKEN.substring(0, 20) + '...' : 'N/A');
+console.log('Base URL:', API_BASE);
 console.log('=================================');
 
 const getHeaders = () => {
@@ -295,7 +298,7 @@ router.post('/generate', async (req, res) => {
 });
 
 // ✅ Ek baar chalao, phir hata dena - Sirf old charts ko fix karne ke liye
-router.post('/fix-old-charts', protect, async (req, res) => {
+router.post('/fix-old-charts', async (req, res) => {
   try {
     const user = await User.findById(req.user._id);
     let fixed = 0;
@@ -316,7 +319,7 @@ router.post('/fix-old-charts', protect, async (req, res) => {
 
 
 // ================== DOWNLOAD PDF (With Panchang) ==================
-router.post('/download-pdf', protect, async (req, res) => {
+router.post('/download-pdf', async (req, res) => {
   try {
     const { kundliData, panchangData, userDetails } = req.body;
     
@@ -786,7 +789,7 @@ router.post('/download-pdf', protect, async (req, res) => {
 });
 
 // ================== SAVE PURCHASED KUNDLI ==================
-router.post('/save-purchased-kundli', protect, async (req, res) => {
+router.post('/save-purchased-kundli', async (req, res) => {
   try {
     const { kundliData, panchangData, birthDetails } = req.body;
     const user = await User.findById(req.user._id);
@@ -872,7 +875,7 @@ router.get('/admin/all-kundlis', async (req, res) => {
 
 // ================== GET PURCHASED KUNDLIS ==================
 // ================== GET PURCHASED KUNDLIS (FIXED VERSION) ==================
-router.get('/my-purchased-kundlis', protect, async (req, res) => {
+router.get('/my-purchased-kundlis', async (req, res) => {
   try {
     console.log('🔍 Fetching purchased kundlis for user:', req.user._id);
     
@@ -938,7 +941,7 @@ router.get('/my-purchased-kundlis', protect, async (req, res) => {
   }
 });
 // ================== SAVE CHART ==================
-router.post('/save', protect, async (req, res) => {
+router.post('/save',  async (req, res) => {
   try {
     const { birthDetails, kundliData, panchangData } = req.body;
     const user = await User.findById(req.user._id);
@@ -953,7 +956,7 @@ router.post('/save', protect, async (req, res) => {
 });
 
 // ================== GET SAVED CHARTS ==================
-router.get('/saved', protect, async (req, res) => {
+router.get('/saved', async (req, res) => {
   try {
     const user = await User.findById(req.user._id);
     res.json({ success: true, charts: user.savedCharts || [] });
@@ -964,7 +967,7 @@ router.get('/saved', protect, async (req, res) => {
 
 
 // ================== DELETE SAVED CHART ==================
-router.delete('/saved/:chartId', protect, async (req, res) => {
+router.delete('/saved/:chartId', async (req, res) => {
   try {
     const user = await User.findById(req.user._id);
     if (!user) return res.status(404).json({ success: false, message: 'User not found' });
