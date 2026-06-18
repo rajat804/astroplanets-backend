@@ -129,7 +129,7 @@ const getDashaFromNakshatra = (nakshatra) => {
 };
 
 // ================== GENERATE KUNDLI & PANCHANG ==================
-router.post('/generate', protect, async (req, res) => {
+router.post('/generate', async (req, res) => {
   try {
     const { date, month, year, hour, minute, latitude, longitude, timezone = 5.5 } = req.body;
 
