@@ -13,7 +13,7 @@ const razorpay = new Razorpay({
 // @route   POST /api/kundlipayments/create-order
 // @desc    Create Razorpay order
 // @access  Private
-router.post('/create-order', protect, async (req, res) => {
+router.post('/create-order', async (req, res) => {
   try {
     // ✅ Testing mode: ₹1 (100 paise)
     // Production mode: ₹99 (9900 paise)
