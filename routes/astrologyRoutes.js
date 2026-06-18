@@ -129,7 +129,7 @@ const getDashaFromNakshatra = (nakshatra) => {
 };
 
 // ================== GENERATE KUNDLI & PANCHANG ==================
-router.post('/generate', async (req, res) => {
+router.post('/generate', protect, async (req, res) => {
   try {
     const { date, month, year, hour, minute, latitude, longitude, timezone = 5.5 } = req.body;
 
@@ -295,7 +295,7 @@ router.post('/generate', async (req, res) => {
 });
 
 // ✅ Ek baar chalao, phir hata dena - Sirf old charts ko fix karne ke liye
-router.post('/fix-old-charts', async (req, res) => {
+router.post('/fix-old-charts', protect, async (req, res) => {
   try {
     const user = await User.findById(req.user._id);
     let fixed = 0;
@@ -316,7 +316,7 @@ router.post('/fix-old-charts', async (req, res) => {
 
 
 // ================== DOWNLOAD PDF (With Panchang) ==================
-router.post('/download-pdf',protect, async (req, res) => {
+router.post('/download-pdf', protect, async (req, res) => {
   try {
     const { kundliData, panchangData, userDetails } = req.body;
     
@@ -786,7 +786,7 @@ router.post('/download-pdf',protect, async (req, res) => {
 });
 
 // ================== SAVE PURCHASED KUNDLI ==================
-router.post('/save-purchased-kundli', async (req, res) => {
+router.post('/save-purchased-kundli', protect, async (req, res) => {
   try {
     const { kundliData, panchangData, birthDetails } = req.body;
     const user = await User.findById(req.user._id);
