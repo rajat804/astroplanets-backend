@@ -32,8 +32,9 @@ const productSchema = new mongoose.Schema(
     },
     type: {
       type: String,
-      enum: ['Rudraksha', 'Mala', 'Rare', 'Necklace', '108 Mala', 'Bracelet'],
-      required: true,
+      required: [true, 'Product type is required'],
+      trim: true,
+      // ⚠️ REMOVE enum - koi bhi type allowed
     },
     gemstone: {
       type: String,
@@ -90,8 +91,9 @@ const productSchema = new mongoose.Schema(
     },
     category: {
       type: String,
-      enum: ['Rudraksha', 'Mala', 'Bracelet', 'Necklace', 'Rare'],
       default: 'Rudraksha',
+      trim: true,
+      // ⚠️ REMOVE enum - koi bhi category allowed
     },
     isActive: {
       type: Boolean,
@@ -102,6 +104,10 @@ const productSchema = new mongoose.Schema(
     timestamps: true,
   }
 );
+
+// Indexes for better performance
+productSchema.index({ name: 1, type: 1 });
+productSchema.index({ price: 1, createdAt: -1 });
 
 const Product = mongoose.model('Product', productSchema);
 module.exports = Product;
