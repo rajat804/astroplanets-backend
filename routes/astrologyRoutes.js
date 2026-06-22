@@ -3,7 +3,8 @@ const router = express.Router();
 const axios = require('axios');
 const { protect } = require('../middleware/auth');
 const User = require('../models/User');
-const pdf = require('html-pdf');
+const { PDFDocument, rgb, StandardFonts } = require('pdf-lib');
+
 
 // ✅ Correct API Base URL
 const API_BASE = 'https://json.astrologyapi.com/v1';
@@ -315,70 +316,50 @@ router.post('/fix-old-charts', protect, async (req, res) => {
   }
 });
 
-
-// ================== DOWNLOAD PDF ==================
+// ================== DOWNLOAD PDF - PROFESSIONAL DESIGN ==================
 router.post('/download-pdf', protect, async (req, res) => {
   try {
     const { kundliData, panchangData, userDetails } = req.body;
     
     console.log('📥 Generating PDF for user:', req.user?._id || 'Unknown');
     
-    // ✅ Helper function
+    // ========== SANITIZER ==========
+    const sanitize = (text) => {
+      if (text === null || text === undefined) return 'N/A';
+      return String(text)
+        .replace(/[\u{1F300}-\u{1FAFF}\u{2600}-\u{27BF}\u{2190}-\u{21FF}\u{2300}-\u{23FF}\u{FE0F}]/gu, '')
+        .replace(/[✦✧✩✪✫✬✭✮✯✰✱✲✳✴✵✶✷✸✹✺✻✼✽✾✿❀❁❂❃]/g, '')
+        .trim();
+    };
+    
+    // Helper function
     const getValue = (obj, key, defaultValue = 'N/A') => {
       if (!obj) return defaultValue;
+      if (Array.isArray(key)) {
+        let current = obj;
+        for (const k of key) {
+          if (current && current[k] !== undefined && current[k] !== null && current[k] !== '') {
+            current = current[k];
+          } else {
+            return defaultValue;
+          }
+        }
+        return current;
+      }
       const value = obj[key];
       return (value !== undefined && value !== null && value !== '') ? value : defaultValue;
     };
     
-    // ✅ User Details
-    const userName = userDetails?.name || req.user?.fullName || req.user?.name || 'User';
-    const userEmail = userDetails?.email || req.user?.email || 'Not provided';
+    // Get user details
+    const userName = sanitize(userDetails?.name || req.user?.fullName || req.user?.name || 'User');
+    const userEmail = sanitize(userDetails?.email || req.user?.email || 'Not provided');
     
-    // ✅ Kundli Data
+    // Extract data
     const kundli = kundliData || {};
     const panchang = panchangData || {};
-    
-    // ========== BASIC DETAILS ==========
-    const ascendant = getValue(kundli, 'ascendant_sign') || getValue(kundli, 'lagna') || 'N/A';
-    const ascendantLord = getValue(kundli, 'ascendant_lord') || getValue(kundli, 'lagna_lord') || 'N/A';
-    const rashi = getValue(kundli, 'rashi') || getValue(kundli, 'sign') || 'N/A';
-    const signLord = getValue(kundli, 'sign_lord') || 'N/A';
-    const nakshatra = getValue(kundli, 'nakshatra') || 'N/A';
-    const nakshatraLord = getValue(kundli, 'nakshatra_lord') || 'N/A';
-    const nakshatraPada = getValue(kundli, 'nakshatra_pada') || 'N/A';
-    const manglik = getValue(kundli, 'manglik') || 'No';
-    
-    // ========== VEDIC DETAILS ==========
-    const yoga = getValue(kundli, 'yoga') || 'N/A';
-    const tithi = getValue(kundli, 'tithi') || 'N/A';
-    const karana = getValue(kundli, 'karana') || 'N/A';
-    const gan = getValue(kundli, 'gan') || 'N/A';
-    const nadi = getValue(kundli, 'nadi') || 'N/A';
-    const varna = getValue(kundli, 'varna') || 'N/A';
-    const vashya = getValue(kundli, 'vashya') || 'N/A';
-    const yoni = getValue(kundli, 'yoni') || 'N/A';
-    const tatva = getValue(kundli, 'tatva') || 'N/A';
-    const paya = getValue(kundli, 'paya') || 'N/A';
-    const nameAlphabet = getValue(kundli, 'name_alphabet') || 'N/A';
-    
-    // ========== DASHA ==========
-    const dasha = kundli.dasha || {};
-    const mahaDasha = getValue(dasha, 'maha_dasha') || 'N/A';
-    const antarDasha = getValue(dasha, 'antar_dasha') || 'N/A';
-    const dashaEndDate = getValue(dasha, 'end_date') || 'N/A';
-    
-    // ========== PANCHANG ==========
-    const sunrise = getValue(panchang, 'sunrise') || 'N/A';
-    const sunset = getValue(panchang, 'sunset') || 'N/A';
-    const moonrise = getValue(panchang, 'moonrise') || 'N/A';
-    const panchangTithi = getValue(panchang, 'tithi') || 'N/A';
-    const panchangNakshatra = getValue(panchang, 'nakshatra') || 'N/A';
-    const panchangYoga = getValue(panchang, 'yog') || 'N/A';
-    const panchangKarana = getValue(panchang, 'karan') || 'N/A';
-    const paksha = getValue(panchang, 'paksha') || 'N/A';
-    
-    // ========== BIRTH DETAILS ==========
     const birth = userDetails?.birthDetails || {};
+    
+    // Birth Details
     const birthDate = birth.date && birth.month && birth.year 
       ? `${birth.date}/${birth.month}/${birth.year}` 
       : 'N/A';
@@ -386,8 +367,30 @@ router.post('/download-pdf', protect, async (req, res) => {
       ? `${birth.hour}:${birth.minute}` 
       : 'N/A';
     
-    // ========== PLANETS TABLE ==========
-    let planetsTableHtml = '';
+    // Basic Details
+    const ascendant = sanitize(getValue(kundli, 'ascendant_sign') || getValue(kundli, 'lagna') || 'N/A');
+    const ascendantLord = sanitize(getValue(kundli, 'ascendant_lord') || getValue(kundli, 'lagna_lord') || 'N/A');
+    const rashi = sanitize(getValue(kundli, 'rashi') || getValue(kundli, 'sign') || 'N/A');
+    const signLord = sanitize(getValue(kundli, 'sign_lord') || 'N/A');
+    const nakshatra = sanitize(getValue(kundli, 'nakshatra') || 'N/A');
+    const nakshatraLord = sanitize(getValue(kundli, 'nakshatra_lord') || 'N/A');
+    const nakshatraPada = sanitize(getValue(kundli, 'nakshatra_pada') || 'N/A');
+    const manglik = sanitize(getValue(kundli, 'manglik') || 'No');
+    
+    // Vedic Details
+    const yoga = sanitize(getValue(kundli, 'yoga') || 'N/A');
+    const tithi = sanitize(getValue(kundli, 'tithi') || 'N/A');
+    const karana = sanitize(getValue(kundli, 'karana') || 'N/A');
+    const gan = sanitize(getValue(kundli, 'gan') || 'N/A');
+    const nadi = sanitize(getValue(kundli, 'nadi') || 'N/A');
+    const varna = sanitize(getValue(kundli, 'varna') || 'N/A');
+    const vashya = sanitize(getValue(kundli, 'vashya') || 'N/A');
+    const yoni = sanitize(getValue(kundli, 'yoni') || 'N/A');
+    const tatva = sanitize(getValue(kundli, 'tatva') || 'N/A');
+    const paya = sanitize(getValue(kundli, 'paya') || 'N/A');
+    const nameAlphabet = sanitize(getValue(kundli, 'name_alphabet') || 'N/A');
+    
+    // Planets
     const planets = kundli.planets || {};
     const planetList = ['sun', 'moon', 'mars', 'mercury', 'jupiter', 'venus', 'saturn', 'rahu', 'ketu'];
     const planetNames = { 
@@ -395,509 +398,594 @@ router.post('/download-pdf', protect, async (req, res) => {
       jupiter: 'Jupiter', venus: 'Venus', saturn: 'Saturn', 
       rahu: 'Rahu', ketu: 'Ketu' 
     };
-    const planetEmojis = {
-      sun: '☀️', moon: '🌙', mars: '♂️', mercury: '☿', 
-      jupiter: '♃', venus: '♀️', saturn: '♄', rahu: '☊', ketu: '☋'
-    };
     
-    for (const planet of planetList) {
-      const pData = planets[planet] || {};
-      planetsTableHtml += `
-        <tr>
-          <td style="padding: 6px 10px; border: 1px solid #333; font-weight: bold; font-size: 12px;">${planetEmojis[planet] || ''} ${planetNames[planet]}</td>
-          <td style="padding: 6px 10px; border: 1px solid #333; font-size: 12px; text-align: center;">${pData.sign || 'N/A'}</td>
-          <td style="padding: 6px 10px; border: 1px solid #333; font-size: 12px; text-align: center;">${pData.degree || 'N/A'}°</td>
-          <td style="padding: 6px 10px; border: 1px solid #333; font-size: 12px; text-align: center;">${pData.house || 'N/A'}</td>
-          <td style="padding: 6px 10px; border: 1px solid #333; font-size: 12px; text-align: center;">${pData.retrograde ? '✅ Yes' : '❌ No'}</td>
-        </tr>
-      `;
-    }
-    
-    // ========== HOUSES TABLE - FIXED ==========
-    let housesTableHtml = '';
+    // Houses
     const houses = kundli.houses || [];
     
-    if (houses.length > 0) {
-      for (let i = 0; i < Math.min(12, houses.length); i++) {
-        const house = houses[i] || {};
-        // ✅ House number = index + 1 (kyunki number key missing hai)
-        const houseNumber = i + 1;
-        const houseSign = house.sign || house.name || 'N/A';
-        const houseLord = house.lord || house.owner || 'N/A';
-        
-        housesTableHtml += `
-          <tr>
-            <td style="padding: 6px 10px; border: 1px solid #333; font-weight: bold; font-size: 12px; text-align: center;">House ${houseNumber}</td>
-            <td style="padding: 6px 10px; border: 1px solid #333; font-size: 12px; text-align: center;">${houseSign}</td>
-            <td style="padding: 6px 10px; border: 1px solid #333; font-size: 12px; text-align: center;">${houseLord}</td>
-          </tr>
-        `;
-      }
-    } else {
-      // ✅ Fallback: Agar houses array empty hai toh default values
-      const defaultSigns = ['Aries', 'Taurus', 'Gemini', 'Cancer', 'Leo', 'Virgo', 'Libra', 'Scorpio', 'Sagittarius', 'Capricorn', 'Aquarius', 'Pisces'];
-      const defaultLords = ['Mars', 'Venus', 'Mercury', 'Moon', 'Sun', 'Mercury', 'Venus', 'Mars', 'Jupiter', 'Saturn', 'Saturn', 'Jupiter'];
-      
-      for (let i = 0; i < 12; i++) {
-        housesTableHtml += `
-          <tr>
-            <td style="padding: 6px 10px; border: 1px solid #333; font-weight: bold; font-size: 12px; text-align: center;">House ${i + 1}</td>
-            <td style="padding: 6px 10px; border: 1px solid #333; font-size: 12px; text-align: center;">${defaultSigns[i]}</td>
-            <td style="padding: 6px 10px; border: 1px solid #333; font-size: 12px; text-align: center;">${defaultLords[i]}</td>
-          </tr>
-        `;
-      }
-    }
+    // Dasha
+    const mahaDasha = sanitize(getValue(kundli, ['dasha', 'maha_dasha']) || 'N/A');
+    const antarDasha = sanitize(getValue(kundli, ['dasha', 'antar_dasha']) || 'N/A');
+    const dashaEndDate = sanitize(getValue(kundli, ['dasha', 'end_date']) || 'N/A');
     
-    // ========== VEDIC DETAILS TABLE ==========
-    const vedicKeys = ['yoga', 'tithi', 'karana', 'gan', 'nadi', 'varna', 'vashya', 'yoni', 'tatva', 'paya', 'name_alphabet'];
-    const vedicLabels = {
-      yoga: '🧘 Yoga',
-      tithi: '📖 Tithi',
-      karana: '🌊 Karana',
-      gan: '👨‍👩‍👧 Gan',
-      nadi: '💫 Nadi',
-      varna: '🎨 Varna',
-      vashya: '🤝 Vashya',
-      yoni: '🐘 Yoni',
-      tatva: '🌍 Tatva',
-      paya: '💰 Paya',
-      name_alphabet: '🔤 Alphabet'
-    };
-
-    let vedicRows = '';
-    for (const key of vedicKeys) {
-      const value = getValue(kundli, key, 'N/A');
-      const label = vedicLabels[key] || key.charAt(0).toUpperCase() + key.slice(1).replace('_', ' ');
-      vedicRows += `
-        <tr>
-          <td style="padding: 6px 10px; border: 1px solid #333; font-weight: bold; font-size: 12px; width: 40%;">${label}</td>
-          <td style="padding: 6px 10px; border: 1px solid #333; font-size: 12px; width: 60%;">${value}</td>
-        </tr>
-      `;
-    }
+    // Panchang
+    const sunrise = sanitize(getValue(panchang, 'sunrise') || 'N/A');
+    const sunset = sanitize(getValue(panchang, 'sunset') || 'N/A');
+    const moonrise = sanitize(getValue(panchang, 'moonrise') || 'N/A');
+    const panchangTithi = sanitize(getValue(panchang, 'tithi') || 'N/A');
+    const panchangNakshatra = sanitize(getValue(panchang, 'nakshatra') || 'N/A');
+    const panchangYoga = sanitize(getValue(panchang, 'yog') || getValue(panchang, 'yoga') || 'N/A');
+    const panchangKarana = sanitize(getValue(panchang, 'karan') || getValue(panchang, 'karana') || 'N/A');
+    const paksha = sanitize(getValue(panchang, 'paksha') || 'N/A');
     
-    // ========== PANCHANG TABLE ==========
-    const panchangKeys = ['sunrise', 'sunset', 'moonrise', 'tithi', 'nakshatra', 'yog', 'karan', 'paksha'];
-    const panchangLabels = {
-      sunrise: '🌅 Sunrise',
-      sunset: '🌇 Sunset',
-      moonrise: '🌙 Moonrise',
-      tithi: '📖 Tithi',
-      nakshatra: '⭐ Nakshatra',
-      yog: '🧘 Yoga',
-      karan: '🌊 Karana',
-      paksha: '📖 Paksha'
-    };
-
-    let panchangRows = '';
-    for (const key of panchangKeys) {
-      const value = getValue(panchang, key, 'N/A');
-      const label = panchangLabels[key] || key.charAt(0).toUpperCase() + key.slice(1).replace('_', ' ');
-      panchangRows += `
-        <tr>
-          <td style="padding: 6px 10px; border: 1px solid #333; font-weight: bold; font-size: 12px; width: 40%;">${label}</td>
-          <td style="padding: 6px 10px; border: 1px solid #333; font-size: 12px; width: 60%;">${value}</td>
-        </tr>
-      `;
-    }
+    // ========== CREATE PDF ==========
+    console.log('📄 Creating PDF...');
     
-    // ========== GANASH JI IMAGE ==========
-    const ganashImageUrl = 'https://www.vhv.rs/dpng/d/125-1253337_ganesh-ji-clipart-png-transparent-png-png-download.png';
+    const pdfDoc = await PDFDocument.create();
+    const font = await pdfDoc.embedFont(StandardFonts.Helvetica);
+    const fontBold = await pdfDoc.embedFont(StandardFonts.HelveticaBold);
     
-    // ========== COMPLETE HTML ==========
-    const htmlContent = `<!DOCTYPE html>
-<html>
-<head>
-  <meta charset="UTF-8">
-  <title>AstroPlanets - Kundli Report</title>
-  <style>
-    * { margin: 0; padding: 0; box-sizing: border-box; }
-    body { 
-      font-family: 'Times New Roman', 'Georgia', serif; 
-      padding: 25px; 
-      background: #ffffff; 
-      color: #1a1a1a; 
-      line-height: 1.5; 
-      font-size: 12px;
-    }
-    .page { max-width: 1000px; margin: 0 auto; }
+    const width = 612;
+    const height = 792;
+    const margin = 50;
     
-    .cover-page { 
-      text-align: center; 
-      padding: 50px 30px; 
-      border: 4px double #D4A017; 
-      margin-bottom: 30px; 
-      background: #fdfaf5; 
-      page-break-after: always;
-      border-radius: 4px;
-    }
-    .cover-page .ganash-img { 
-      max-width: 150px; 
-      margin-bottom: 20px; 
-      border-radius: 50%;
-      border: 4px solid #D4A017;
-      padding: 10px;
-      background: #fff;
-    }
-    .cover-page h1 { 
-      font-size: 36px; 
-      letter-spacing: 3px; 
-      color: #8B0000;
-      margin-bottom: 5px;
-      font-weight: bold;
-    }
-    .cover-page .subtitle { 
-      font-size: 16px; 
-      color: #D4A017; 
-      letter-spacing: 4px;
-      margin-bottom: 20px;
-      font-weight: 600;
-    }
-    .cover-page .divider {
-      width: 120px;
-      height: 2px;
-      background: #D4A017;
-      margin: 15px auto;
-    }
-    .cover-page .user-name { 
-      font-size: 26px; 
-      font-weight: bold; 
-      color: #1a1a1a;
-      margin: 15px 0;
-      letter-spacing: 1px;
-    }
-    .cover-page .details { 
-      font-size: 13px; 
-      color: #444; 
-      line-height: 2;
-    }
-    .cover-page .details strong {
-      color: #1a1a1a;
-    }
-    .cover-page .footer-text {
-      margin-top: 30px;
-      font-size: 10px;
-      color: #888;
-    }
+    // Colors
+    const darkRed = rgb(0.545, 0, 0);
+    const gold = rgb(0.831, 0.627, 0.09);
+    const black = rgb(0, 0, 0);
+    const gray = rgb(0.4, 0.4, 0.4);
+    const darkGray = rgb(0.2, 0.2, 0.2);
+    const white = rgb(1, 1, 1);
+    const lightRed = rgb(0.996, 0.949, 0.949);
+    const lightGold = rgb(0.996, 0.99, 0.91);
+    const lightGreen = rgb(0.94, 0.99, 0.94);
+    const lightBlue = rgb(0.94, 0.97, 0.99);
+    const lightPurple = rgb(0.97, 0.94, 0.99);
     
-    .header { 
-      text-align: center; 
-      margin-bottom: 20px; 
-      padding-bottom: 12px; 
-      border-bottom: 3px solid #D4A017;
-    }
-    .header h1 { 
-      font-size: 24px; 
-      letter-spacing: 3px; 
-      color: #8B0000;
-    }
-    .header p { 
-      font-size: 11px; 
-      color: #666; 
-      letter-spacing: 1px;
-    }
+    // ==================== COVER PAGE ====================
+    const page1 = pdfDoc.addPage();
+    let y = height - 50;
     
-    .user-info { 
-      background: #f8f4e8; 
-      padding: 12px 20px; 
-      margin-bottom: 20px; 
-      border: 1px solid #ccc; 
-      text-align: center; 
-      border-radius: 4px;
-    }
-    .user-info h3 { 
-      font-size: 14px; 
-      color: #8B0000;
-      margin-bottom: 5px;
-    }
-    .user-info p { 
-      margin: 3px 0; 
-      font-size: 12px; 
-    }
-    
-    .section { 
-      margin-bottom: 18px; 
-      border: 1px solid #333; 
-      page-break-inside: avoid;
-      border-radius: 4px;
-      overflow: hidden;
-    }
-    .section-title { 
-      background: #8B0000; 
-      color: #fff;
-      padding: 8px 16px; 
-      font-size: 13px; 
-      font-weight: bold; 
-      letter-spacing: 1px;
-    }
-    .section-content { 
-      padding: 12px 16px; 
-      background: #fff; 
-    }
-    
-    .ascendant-box { 
-      text-align: center; 
-      padding: 20px; 
-      border: 3px solid #D4A017; 
-      margin-bottom: 20px; 
-      background: #fdfaf5; 
-      border-radius: 8px;
-    }
-    .ascendant-label { 
-      font-size: 12px; 
-      letter-spacing: 3px; 
-      color: #666;
-    }
-    .ascendant-value { 
-      font-size: 34px; 
-      font-weight: bold; 
-      color: #8B0000;
-      margin: 5px 0;
-      text-transform: uppercase;
-    }
-    .ascendant-lord { 
-      font-size: 14px; 
-      color: #444;
-    }
-    
-    table { 
-      width: 100%; 
-      border-collapse: collapse; 
-      margin-bottom: 10px; 
-    }
-    th { 
-      background: #8B0000; 
-      color: #fff;
-      padding: 8px 10px; 
-      border: 1px solid #333; 
-      font-weight: bold; 
-      text-align: center; 
-      font-size: 11px;
-      letter-spacing: 1px;
-    }
-    td { 
-      padding: 6px 10px; 
-      border: 1px solid #333; 
-      font-size: 12px; 
-    }
-    tr:nth-child(even) {
-      background: #f8f4e8;
-    }
-    
-    .manglik-yes { 
-      background: #8B0000; 
-      color: #fff; 
-      padding: 12px; 
-      text-align: center; 
-      margin-bottom: 18px; 
-      border: 1px solid #8B0000; 
-      border-radius: 4px;
-    }
-    .manglik-no { 
-      background: #e8f0e8; 
-      color: #1a1a1a; 
-      padding: 12px; 
-      text-align: center; 
-      margin-bottom: 18px; 
-      border: 1px solid #2d5a27; 
-      border-radius: 4px;
-    }
-    
-    .dasha-box { 
-      background: #f8f4e8; 
-      padding: 12px 16px; 
-      border: 1px solid #333; 
-      text-align: center; 
-      border-radius: 4px;
-    }
-    .dasha-box div {
-      margin: 4px 0;
-      font-size: 13px;
-    }
-    .dasha-box strong {
-      color: #8B0000;
-    }
-    
-    .footer { 
-      text-align: center; 
-      margin-top: 25px; 
-      padding-top: 12px; 
-      border-top: 2px solid #D4A017; 
-      font-size: 9px; 
-      color: #888; 
-    }
-    
-    @media print {
-      body { padding: 15px; }
-      .section { break-inside: avoid; }
-      .cover-page { page-break-after: always; }
-    }
-  </style>
-</head>
-<body>
-<div class="page">
-  
-  <!-- COVER PAGE -->
-  <div class="cover-page">
-    <img src="${ganashImageUrl}" alt="Ganash Ji" class="ganash-img" onerror="this.style.display='none'">
-    <h1>ASTROPLANETS</h1>
-    <div class="subtitle">✦ Vedic Astrology ✦</div>
-    <div class="divider"></div>
-    <div class="user-name">${userName}</div>
-    <div class="details">
-      <p><strong>📅 Date of Birth:</strong> ${birthDate}</p>
-      <p><strong>⏰ Time of Birth:</strong> ${birthTime}</p>
-      <p><strong>⭐ Rashi:</strong> ${rashi} &nbsp;|&nbsp; <strong>🌙 Nakshatra:</strong> ${nakshatra}</p>
-      <p><strong>🌅 Lagna:</strong> ${ascendant}</p>
-    </div>
-    <div class="divider"></div>
-    <div class="footer-text">
-      <p>Generated on: ${new Date().toLocaleDateString('en-IN', { day: '2-digit', month: 'long', year: 'numeric' })} at ${new Date().toLocaleTimeString()}</p>
-      <p>© ${new Date().getFullYear()} AstroPlanets - All Rights Reserved</p>
-    </div>
-  </div>
-  
-  <!-- DATA PAGE -->
-  <div class="header">
-    <h1>🔮 ASTROPLANETS</h1>
-    <p>✦ ${userName} ✦</p>
-  </div>
-  
-  <div class="user-info">
-    <h3>📋 Birth Details</h3>
-    <p><strong>Name:</strong> ${userName} &nbsp;|&nbsp; <strong>Email:</strong> ${userEmail}</p>
-    <p><strong>DOB:</strong> ${birthDate} &nbsp;|&nbsp; <strong>Time:</strong> ${birthTime}</p>
-  </div>
-  
-  <!-- ASCENDANT -->
-  <div class="ascendant-box">
-    <div class="ascendant-label">🌅 LAGNA (ASCENDANT)</div>
-    <div class="ascendant-value">${ascendant}</div>
-    <div class="ascendant-lord">Lord: ${ascendantLord}</div>
-  </div>
-  
-  <!-- RASHI & NAKSHATRA -->
-  <div class="section">
-    <div class="section-title">⭐ RASHI &amp; NAKSHATRA</div>
-    <div class="section-content">
-      <table>
-        <tr><td style="font-weight: bold; width: 50%;">Rashi (Moon Sign)</td><td>${rashi}</td></tr>
-        <tr><td style="font-weight: bold;">Sign Lord</td><td>${signLord}</td></tr>
-        <tr><td style="font-weight: bold;">Nakshatra (Birth Star)</td><td>${nakshatra}</td></tr>
-        <tr><td style="font-weight: bold;">Nakshatra Lord</td><td>${nakshatraLord}</td></tr>
-        <tr><td style="font-weight: bold;">Pada / Charan</td><td>${nakshatraPada}</td></tr>
-      </table>
-    </div>
-  </div>
-  
-  <!-- MANGLIK DOSHA -->
-  <div class="${manglik === 'Yes' || manglik === 'Manglik' ? 'manglik-yes' : 'manglik-no'}">
-    <strong>🔴 MANGAL DOSHA</strong><br>
-    <span style="font-size: 20px; font-weight: bold;">${manglik === 'Yes' || manglik === 'Manglik' ? '⚡ Manglik' : '✅ Non-Manglik'}</span>
-  </div>
-  
-  <!-- PLANETS -->
-  <div class="section">
-    <div class="section-title">🪐 PLANETARY POSITIONS</div>
-    <div class="section-content">
-      <table>
-        <thead>
-          <tr><th>Planet</th><th>Sign</th><th>Degree</th><th>House</th><th>Retrograde</th></tr>
-        </thead>
-        <tbody>${planetsTableHtml}</tbody>
-      </table>
-    </div>
-  </div>
-  
-  <!-- HOUSES - FIXED -->
-  <div class="section">
-    <div class="section-title">🏠 HOUSES (BHAVAS)</div>
-    <div class="section-content">
-      <table>
-        <thead>
-          <tr><th>House</th><th>Sign</th><th>Lord</th></tr>
-        </thead>
-        <tbody>${housesTableHtml}</tbody>
-      </table>
-    </div>
-  </div>
-  
-  <!-- VEDIC DETAILS -->
-  <div class="section">
-    <div class="section-title">📖 VEDIC DETAILS</div>
-    <div class="section-content">
-      <table>${vedicRows}</table>
-    </div>
-  </div>
-  
-  <!-- DASHA -->
-  <div class="section">
-    <div class="section-title">⏳ CURRENT VIMSHOTTARI DASHA</div>
-    <div class="section-content">
-      <div class="dasha-box">
-        <div><strong>Maha Dasha:</strong> ${mahaDasha}</div>
-        <div><strong>Antar Dasha:</strong> ${antarDasha}</div>
-        <div><strong>📅 Valid Until:</strong> ${dashaEndDate}</div>
-      </div>
-    </div>
-  </div>
-  
-  <!-- PANCHANG -->
-  <div class="section">
-    <div class="section-title">📅 DAILY PANCHANG</div>
-    <div class="section-content">
-      <table>${panchangRows}</table>
-    </div>
-  </div>
-  
-  <div class="footer">
-    <p>This report is based on Vedic astrology calculations.</p>
-    <p>© ${new Date().getFullYear()} AstroPlanets - All Rights Reserved</p>
-  </div>
-  
-</div>
-</body>
-</html>`;
-    
-    // ================================================================
-    // ✅ PDF GENERATION
-    // ================================================================
-    
-    console.log('📄 Generating PDF...');
-    
-    const options = {
-      format: 'A4',
-      orientation: 'portrait',
-      border: '8mm',
-      type: 'pdf',
-      timeout: 60000,
-      quality: '100',
-    };
-    
-    pdf.create(htmlContent, options).toBuffer((err, buffer) => {
-      if (err) {
-        console.error('❌ PDF generation error:', err);
-        return res.status(500).json({ 
-          success: false, 
-          message: 'PDF generation failed: ' + err.message 
-        });
-      }
-      
-      console.log('✅ PDF generated successfully. Size:', buffer.length);
-      
-      res.setHeader('Content-Type', 'application/pdf');
-      res.setHeader('Content-Disposition', 'attachment; filename=kundli_report.pdf');
-      res.setHeader('Content-Length', buffer.length);
-      res.send(buffer);
+    // Decorative border
+    page1.drawRectangle({
+      x: 30,
+      y: 30,
+      width: width - 60,
+      height: height - 60,
+      borderColor: gold,
+      borderWidth: 2,
     });
     
-  } catch (err) {
-    console.error('❌ Download error:', err);
-    console.error('Error stack:', err.stack);
-    res.status(500).json({ 
-      success: false, 
-      message: 'Failed to generate PDF: ' + err.message 
+    // Inner decorative border
+    page1.drawRectangle({
+      x: 40,
+      y: 40,
+      width: width - 80,
+      height: height - 80,
+      borderColor: gold,
+      borderWidth: 0.5,
+    });
+    
+    // Top decorative line
+    page1.drawLine({
+      start: { x: 50, y: height - 70 },
+      end: { x: width - 50, y: height - 70 },
+      thickness: 1,
+      color: gold,
+    });
+    
+    // Main Title
+    page1.drawText('A S T R O P L A N E T S', {
+      x: width / 2 - 160,
+      y: height - 140,
+      size: 36,
+      font: fontBold,
+      color: darkRed,
+    });
+    
+    // Subtitle
+    page1.drawText('Vedic Astrology Birth Chart Report', {
+      x: width / 2 - 130,
+      y: height - 180,
+      size: 16,
+      font: font,
+      color: gold,
+    });
+    
+    // Decorative divider
+    page1.drawLine({
+      start: { x: width / 2 - 80, y: height - 210 },
+      end: { x: width / 2 + 80, y: height - 210 },
+      thickness: 2,
+      color: gold,
+    });
+    
+    // User Name
+    page1.drawText(userName, {
+      x: width / 2 - 80,
+      y: height - 260,
+      size: 28,
+      font: fontBold,
+      color: darkRed,
+    });
+    
+    // Birth Details Box
+    const boxY = height - 350;
+    page1.drawRectangle({
+      x: width / 2 - 180,
+      y: boxY,
+      width: 360,
+      height: 180,
+      color: lightRed,
+      borderColor: darkRed,
+      borderWidth: 1,
+    });
+    
+    let detailY = boxY + 30;
+    page1.drawText('BIRTH DETAILS', {
+      x: width / 2 - 80,
+      y: detailY,
+      size: 14,
+      font: fontBold,
+      color: darkRed,
+    });
+    detailY += 25;
+    
+    page1.drawText(`Date of Birth: ${birthDate}`, {
+      x: width / 2 - 150,
+      y: detailY,
+      size: 12,
+      font: font,
+      color: darkGray,
+    });
+    detailY += 20;
+    
+    page1.drawText(`Time of Birth: ${birthTime}`, {
+      x: width / 2 - 150,
+      y: detailY,
+      size: 12,
+      font: font,
+      color: darkGray,
+    });
+    detailY += 20;
+    
+    page1.drawText(`Rashi: ${rashi}`, {
+      x: width / 2 - 150,
+      y: detailY,
+      size: 12,
+      font: font,
+      color: darkGray,
+    });
+    detailY += 20;
+    
+    page1.drawText(`Nakshatra: ${nakshatra}`, {
+      x: width / 2 - 150,
+      y: detailY,
+      size: 12,
+      font: font,
+      color: darkGray,
+    });
+    detailY += 20;
+    
+    page1.drawText(`Lagna: ${ascendant}`, {
+      x: width / 2 - 150,
+      y: detailY,
+      size: 12,
+      font: font,
+      color: darkGray,
+    });
+    
+    // Footer
+    page1.drawText(`Generated on: ${new Date().toLocaleDateString()}`, {
+      x: width / 2 - 80,
+      y: 60,
+      size: 10,
+      font: font,
+      color: gray,
+    });
+    page1.drawText(`© ${new Date().getFullYear()} AstroPlanets - All Rights Reserved`, {
+      x: width / 2 - 140,
+      y: 40,
+      size: 10,
+      font: font,
+      color: gray,
+    });
+    
+    // ==================== DATA PAGE ====================
+    const page2 = pdfDoc.addPage();
+    let y2 = height - 40;
+    
+    // Header
+    page2.drawText('A S T R O P L A N E T S', {
+      x: margin,
+      y: y2,
+      size: 18,
+      font: fontBold,
+      color: darkRed,
+    });
+    y2 -= 25;
+    
+    page2.drawText(`Kundli Report: ${userName}`, {
+      x: margin,
+      y: y2,
+      size: 13,
+      font: font,
+      color: gold,
+    });
+    y2 -= 35;
+    
+    // ======== LAGNA SECTION ========
+    page2.drawRectangle({
+      x: margin,
+      y: y2 - 55,
+      width: width - 2 * margin,
+      height: 65,
+      color: darkRed,
+    });
+    
+    page2.drawText('LAGNA (ASCENDANT)', {
+      x: width / 2 - 85,
+      y: y2 - 22,
+      size: 12,
+      font: fontBold,
+      color: white,
+    });
+    page2.drawText(ascendant, {
+      x: width / 2 - 60,
+      y: y2 - 48,
+      size: 26,
+      font: fontBold,
+      color: gold,
+    });
+    page2.drawText(`Lord: ${ascendantLord}`, {
+      x: width / 2 - 40,
+      y: y2 - 62,
+      size: 11,
+      font: font,
+      color: white,
+    });
+    y2 -= 70;
+    
+    // ======== RASHI & NAKSHATRA ========
+    page2.drawText('RASHI & NAKSHATRA', {
+      x: margin,
+      y: y2,
+      size: 14,
+      font: fontBold,
+      color: darkRed,
+    });
+    y2 -= 20;
+    
+    // Grid for Rashi & Nakshatra
+    const rashiBoxes = [
+      ['Rashi (Moon Sign)', rashi],
+      ['Sign Lord', signLord],
+      ['Nakshatra (Birth Star)', nakshatra],
+      ['Nakshatra Lord', nakshatraLord],
+      ['Pada / Charan', nakshatraPada]
+    ];
+    
+    const boxWidth = (width - 2 * margin - 20) / 2;
+    let rx = margin;
+    let ry = y2 - 20;
+    let rCount = 0;
+    
+    for (const [label, value] of rashiBoxes) {
+      const xPos = rCount % 2 === 0 ? margin : margin + boxWidth + 20;
+      const yPos = ry;
+      
+      page2.drawRectangle({
+        x: xPos,
+        y: yPos - 20,
+        width: boxWidth,
+        height: 25,
+        color: lightBlue,
+        borderColor: gray,
+        borderWidth: 0.5,
+      });
+      
+      page2.drawText(`${label}: ${value}`, {
+        x: xPos + 8,
+        y: yPos - 14,
+        size: 10,
+        font: rCount % 2 === 0 ? fontBold : font,
+        color: black,
+      });
+      
+      rCount++;
+      if (rCount % 2 === 0) {
+        ry -= 30;
+      }
+    }
+    y2 = ry - 15;
+    
+    // ======== MANGLIK ========
+    const isManglik = manglik === 'Yes' || manglik === 'Manglik';
+    const manglikBg = isManglik ? rgb(0.8, 0.1, 0.1) : rgb(0.1, 0.6, 0.1);
+    
+    page2.drawRectangle({
+      x: margin,
+      y: y2 - 35,
+      width: width - 2 * margin,
+      height: 40,
+      color: manglikBg,
+    });
+    
+    page2.drawText(`MANGAL DOSHA: ${isManglik ? 'Manglik' : 'Non-Manglik'}`, {
+      x: width / 2 - 90,
+      y: y2 - 23,
+      size: 16,
+      font: fontBold,
+      color: white,
+    });
+    y2 -= 45;
+    
+    // ======== PLANETS TABLE ========
+    page2.drawText('PLANETARY POSITIONS', {
+      x: margin,
+      y: y2,
+      size: 14,
+      font: fontBold,
+      color: darkRed,
+    });
+    y2 -= 20;
+    
+    const tableX = margin;
+    const tableY = y2;
+    const tableWidth = width - 2 * margin;
+    const colWidths = [70, 65, 50, 50, 65];
+    
+    // Table Header
+    page2.drawRectangle({
+      x: tableX,
+      y: tableY - 22,
+      width: tableWidth,
+      height: 25,
+      color: darkRed,
+    });
+    
+    const headers = ['Planet', 'Sign', 'Degree', 'House', 'Retrograde'];
+    let hX = tableX + 5;
+    for (let i = 0; i < headers.length; i++) {
+      page2.drawText(headers[i], {
+        x: hX,
+        y: tableY - 15,
+        size: 10,
+        font: fontBold,
+        color: white,
+      });
+      hX += colWidths[i];
+    }
+    
+    y2 -= 25;
+    let rowY2 = y2;
+    
+    for (let i = 0; i < planetList.length; i++) {
+      const planet = planetList[i];
+      const pData = planets[planet] || {};
+      const isRetrograde = pData.retrograde ? 'Yes' : 'No';
+      
+      const rowBg = i % 2 === 0 ? rgb(0.98, 0.975, 0.96) : white;
+      page2.drawRectangle({
+        x: tableX,
+        y: rowY2 - 18,
+        width: tableWidth,
+        height: 20,
+        color: rowBg,
+        borderColor: gray,
+        borderWidth: 0.5,
+      });
+      
+      const planetName = planetNames[planet] || planet;
+      const planetSign = sanitize(pData.sign || 'N/A');
+      const planetDegree = sanitize(pData.degree || 'N/A');
+      const planetHouse = sanitize(pData.house || 'N/A');
+      
+      const rowData = [planetName, planetSign, `${planetDegree}°`, planetHouse, isRetrograde];
+      
+      let rX = tableX + 5;
+      for (let j = 0; j < rowData.length; j++) {
+        page2.drawText(rowData[j], {
+          x: rX,
+          y: rowY2 - 13,
+          size: 9,
+          font: j === 0 ? fontBold : font,
+          color: black,
+        });
+        rX += colWidths[j];
+      }
+      rowY2 -= 20;
+    }
+    y2 = rowY2 - 10;
+    
+    // ======== VEDIC DETAILS ========
+    page2.drawText('VEDIC DETAILS', {
+      x: margin,
+      y: y2,
+      size: 14,
+      font: fontBold,
+      color: darkRed,
+    });
+    y2 -= 20;
+    
+    const vedicData = [
+      ['Yoga', yoga],
+      ['Tithi', tithi],
+      ['Karana', karana],
+      ['Gan', gan],
+      ['Nadi', nadi],
+      ['Varna', varna],
+      ['Vashya', vashya],
+      ['Yoni', yoni],
+      ['Sign Lord', signLord],
+      ['Tatva', tatva],
+      ['Paya', paya],
+      ['Alphabet', nameAlphabet]
+    ];
+    
+    const vColWidth = (width - 2 * margin - 15) / 3;
+    let vRow = y2 - 20;
+    let vCol = 0;
+    
+    for (const [label, value] of vedicData) {
+      const xPos = margin + (vCol * (vColWidth + 7));
+      const yPos = vRow;
+      
+      page2.drawRectangle({
+        x: xPos,
+        y: yPos - 18,
+        width: vColWidth,
+        height: 22,
+        color: lightPurple,
+        borderColor: gray,
+        borderWidth: 0.5,
+      });
+      
+      page2.drawText(`${label}: ${value}`, {
+        x: xPos + 5,
+        y: yPos - 13,
+        size: 9,
+        font: font,
+        color: black,
+      });
+      
+      vCol++;
+      if (vCol === 3) {
+        vCol = 0;
+        vRow -= 26;
+      }
+    }
+    y2 = vRow - 10;
+    
+    // ======== DASHA ========
+    page2.drawText('CURRENT VIMSHOTTARI DASHA', {
+      x: margin,
+      y: y2,
+      size: 14,
+      font: fontBold,
+      color: darkRed,
+    });
+    y2 -= 20;
+    
+    page2.drawRectangle({
+      x: margin,
+      y: y2 - 35,
+      width: width - 2 * margin,
+      height: 40,
+      color: lightGold,
+      borderColor: gold,
+      borderWidth: 1,
+    });
+    
+    page2.drawText(`Maha Dasha: ${mahaDasha}`, {
+      x: width / 2 - 130,
+      y: y2 - 24,
+      size: 11,
+      font: fontBold,
+      color: darkGray,
+    });
+    page2.drawText(`Antar Dasha: ${antarDasha}`, {
+      x: width / 2 - 20,
+      y: y2 - 24,
+      size: 11,
+      font: fontBold,
+      color: darkGray,
+    });
+    page2.drawText(`Valid Until: ${dashaEndDate}`, {
+      x: width / 2 + 80,
+      y: y2 - 24,
+      size: 11,
+      font: fontBold,
+      color: darkGray,
+    });
+    y2 -= 50;
+    
+    // ======== PANCHANG ========
+    page2.drawText('DAILY PANCHANG', {
+      x: margin,
+      y: y2,
+      size: 14,
+      font: fontBold,
+      color: darkRed,
+    });
+    y2 -= 20;
+    
+    const panchangDataList = [
+      ['Sunrise', sunrise],
+      ['Sunset', sunset],
+      ['Moonrise', moonrise],
+      ['Tithi', panchangTithi],
+      ['Nakshatra', panchangNakshatra],
+      ['Yoga', panchangYoga],
+      ['Karana', panchangKarana],
+      ['Paksha', paksha]
+    ];
+    
+    const pColWidth = (width - 2 * margin - 10) / 2;
+    let pRow = y2 - 18;
+    let pCol = 0;
+    
+    for (const [label, value] of panchangDataList) {
+      const xPos = pCol === 0 ? margin : margin + pColWidth + 10;
+      const yPos = pRow;
+      
+      page2.drawRectangle({
+        x: xPos,
+        y: yPos - 18,
+        width: pColWidth,
+        height: 22,
+        color: lightGreen,
+        borderColor: rgb(0.86, 0.97, 0.86),
+        borderWidth: 0.5,
+      });
+      
+      page2.drawText(`${label}: ${value}`, {
+        x: xPos + 5,
+        y: yPos - 13,
+        size: 10,
+        font: font,
+        color: black,
+      });
+      
+      pCol++;
+      if (pCol === 2) {
+        pCol = 0;
+        pRow -= 26;
+      }
+    }
+    
+    // ======== FOOTER ========
+    const footerY = 30;
+    page2.drawText('This report is based on Vedic astrology calculations.', {
+      x: width / 2 - 130,
+      y: footerY + 10,
+      size: 8,
+      font: font,
+      color: gray,
+    });
+    page2.drawText(`© ${new Date().getFullYear()} AstroPlanets - All Rights Reserved`, {
+      x: width / 2 - 120,
+      y: footerY - 5,
+      size: 8,
+      font: font,
+      color: gray,
+    });
+    
+    // ========== SAVE PDF ==========
+    const pdfBytes = await pdfDoc.save();
+    
+    console.log('✅ PDF generated successfully. Size:', pdfBytes.length);
+    
+    res.setHeader('Content-Type', 'application/pdf');
+    res.setHeader('Content-Disposition', 'attachment; filename=kundli_report.pdf');
+    res.setHeader('Content-Length', pdfBytes.length);
+    res.send(Buffer.from(pdfBytes));
+    
+  } catch (error) {
+    console.error('❌ PDF generation error:', error);
+    console.error('Error stack:', error.stack);
+    res.status(500).json({
+      success: false,
+      message: 'Failed to generate PDF: ' + error.message
     });
   }
 });
@@ -987,7 +1075,6 @@ router.get('/admin/all-kundlis', async (req, res) => {
   }
 });
 
-// ================== GET PURCHASED KUNDLIS ==================
 // ================== GET PURCHASED KUNDLIS (FIXED VERSION) ==================
 router.get('/my-purchased-kundlis', protect, async (req, res) => {
   try {
