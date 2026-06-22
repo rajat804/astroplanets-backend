@@ -36,7 +36,8 @@ const orderSchema = new mongoose.Schema(
     ],
     originalAmount: {
       type: Number,
-      required: true,
+      required: false,  // ✅ Changed to false
+      default: 0,      // ✅ Added default
     },
     totalAmount: {
       type: Number,
@@ -74,6 +75,20 @@ const orderSchema = new mongoose.Schema(
       type: String,
       default: 'razorpay',
     },
+    // ✅ Add status history for tracking
+    statusHistory: [
+      {
+        status: {
+          type: String,
+          enum: ['pending', 'confirmed', 'processing', 'shipped', 'delivered', 'cancelled'],
+        },
+        note: String,
+        updatedAt: {
+          type: Date,
+          default: Date.now,
+        },
+      },
+    ],
   },
   {
     timestamps: true,
