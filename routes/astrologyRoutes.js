@@ -452,26 +452,117 @@ router.post('/download-pdf', protect, async (req, res) => {
     };
 
     // ========== COVER PAGE ==========
-    currentPage.drawRectangle({ x: 30, y: 30, width: pageWidth - 60, height: pageHeight - 60, borderColor: colors.gold, borderWidth: 3 });
-    currentPage.drawRectangle({ x: 40, y: 40, width: pageWidth - 80, height: pageHeight - 80, borderColor: colors.gold, borderWidth: 1 });
+   // Cover Page Border
+currentPage.drawRectangle({
+  x: 30,
+  y: 30,
+  width: pageWidth - 60,
+  height: pageHeight - 60,
+  borderColor: colors.gold,
+  borderWidth: 3,
+});
 
-    currentPage.drawText('ASTROPLANETS', { x: pageWidth/2 - 135, y: pageHeight - 130, size: 36, font: fontBold, color: colors.darkRed });
-    currentPage.drawText('Vedic Astrology Birth Chart Report', { x: pageWidth/2 - 155, y: pageHeight - 170, size: 14, font: font, color: colors.gold });
+currentPage.drawRectangle({
+  x: 40,
+  y: 40,
+  width: pageWidth - 80,
+  height: pageHeight - 80,
+  borderColor: colors.gold,
+  borderWidth: 1,
+});
 
-    currentPage.drawText(userName.toUpperCase(), { x: pageWidth/2 - 110, y: pageHeight - 245, size: 26, font: fontBold, color: colors.darkRed });
+// Title
+currentPage.drawText('ASTROPLANETS', {
+  x: pageWidth / 2 - 135,
+  y: pageHeight - 130,
+  size: 36,
+  font: fontBold,
+  color: colors.darkRed,
+});
 
-    let detailY = pageHeight - 340;
-    currentPage.drawRectangle({ x: pageWidth/2 - 165, y: detailY - 10, width: 330, height: 170, color: colors.lightRed, borderColor: colors.darkRed, borderWidth: 1.5 });
+currentPage.drawText('Vedic Astrology Birth Chart Report', {
+  x: pageWidth / 2 - 105,
+  y: pageHeight - 165,
+  size: 14,
+  font: font,
+  color: colors.gold,
+});
 
-    currentPage.drawText('BIRTH DETAILS', { x: pageWidth/2 - 65, y: detailY + 135, size: 13, font: fontBold, color: colors.darkRed });
-    detailY -= 25;
-    currentPage.drawText('Date  : ' + birthDate, { x: pageWidth/2 - 130, y: detailY + 100, size: 11, font: font, color: colors.darkGray });
-    currentPage.drawText('Time  : ' + birthTime, { x: pageWidth/2 - 130, y: detailY + 75, size: 11, font: font, color: colors.darkGray });
-    // currentPage.drawText('Place : ' + birthPlace, { x: pageWidth/2 - 130, y: detailY + 50, size: 11, font: font, color: colors.darkGray });
-    currentPage.drawText('Rashi : ' + rashi, { x: pageWidth/2 - 130, y: detailY + 25, size: 11, font: font, color: colors.darkGray });
+// User Name
+currentPage.drawText(userName.toUpperCase(), {
+  x: pageWidth / 2 - 110,
+  y: pageHeight - 235,
+  size: 26,
+  font: fontBold,
+  color: colors.darkRed,
+});
 
-    currentPage.drawText('Generated: ' + new Date().toLocaleDateString(), { x: pageWidth/2 - 85, y: 55, size: 9, font: font, color: colors.gray });
+// Birth Details Box
+const detailBoxY = pageHeight - 470;
 
+currentPage.drawRectangle({
+  x: pageWidth / 2 - 165,
+  y: detailBoxY,
+  width: 330,
+  height: 140,
+  color: colors.lightRed,
+  borderColor: colors.darkRed,
+  borderWidth: 1.5,
+});
+
+// Heading
+currentPage.drawText('BIRTH DETAILS', {
+  x: pageWidth / 2 - 55,
+  y: detailBoxY + 115,
+  size: 13,
+  font: fontBold,
+  color: colors.darkRed,
+});
+
+// Details
+currentPage.drawText(`Date : ${birthDate}`, {
+  x: pageWidth / 2 - 130,
+  y: detailBoxY + 85,
+  size: 11,
+  font: font,
+  color: colors.darkGray,
+});
+
+currentPage.drawText(`Time : ${birthTime}`, {
+  x: pageWidth / 2 - 130,
+  y: detailBoxY + 60,
+  size: 11,
+  font: font,
+  color: colors.darkGray,
+});
+
+currentPage.drawText(`Rashi : ${rashi}`, {
+  x: pageWidth / 2 - 130,
+  y: detailBoxY + 35,
+  size: 11,
+  font: font,
+  color: colors.darkGray,
+});
+
+currentPage.drawText(`Nakshatra : ${nakshatra}`, {
+  x: pageWidth / 2 - 130,
+  y: detailBoxY + 10,
+  size: 11,
+  font: font,
+  color: colors.darkGray,
+});
+
+// Footer
+currentPage.drawText(
+  `Generated: ${new Date().toLocaleDateString()}`,
+  {
+    x: pageWidth / 2 - 75,
+    y: 55,
+    size: 9,
+    font: font,
+    color: colors.gray,
+  }
+);
     // ========== CONTENT PAGE ==========
     addNewPage();
 
