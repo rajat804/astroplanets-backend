@@ -24,6 +24,7 @@ const getAllOrders = async (req, res) => {
     ]);
     
     res.json({
+      success: true,
       orders,
       stats: {
         totalOrders,
@@ -38,7 +39,11 @@ const getAllOrders = async (req, res) => {
     });
   } catch (error) {
     console.error('Get all orders error:', error);
-    res.status(500).json({ msg: 'Server error', error: error.message });
+    res.status(500).json({ 
+      success: false,
+      msg: 'Server error', 
+      error: error.message 
+    });
   }
 };
 
@@ -51,36 +56,103 @@ const getOrderById = async (req, res) => {
       .populate('user', 'fullName email');
     
     if (!order) {
-      return res.status(404).json({ msg: 'Order not found' });
+      return res.status(404).json({ 
+        success: false,
+        msg: 'Order not found' 
+      });
     }
     
-    res.json(order);
+    res.json({
+      success: true,
+      order
+    });
   } catch (error) {
     console.error('Get order error:', error);
-    res.status(500).json({ msg: 'Server error', error: error.message });
+    res.status(500).json({ 
+      success: false,
+      msg: 'Server error', 
+      error: error.message 
+    });
   }
 };
 
-// @desc    Update order status (admin)
+// @desc    Update order status (admin) - WITH PAYMENT VALIDATION
 // @route   PUT /api/orders/admin/:id/status
 // @access  Private/Admin
 const updateOrderStatus = async (req, res) => {
-  const { orderStatus } = req.body;
-  
   try {
+    console.log('📝 Update order status - ID:', req.params.id);
+    console.log('📦 Request body:', req.body);
+    
+    const { orderStatus } = req.body;
+    
+    // Validate request
+    if (!orderStatus) {
+      return res.status(400).json({
+        success: false,
+        msg: 'Order status is required'
+      });
+    }
+
+    // Validate status value
+    const validStatuses = ['pending', 'confirmed', 'processing', 'shipped', 'delivered', 'cancelled'];
+    if (!validStatuses.includes(orderStatus)) {
+      return res.status(400).json({
+        success: false,
+        msg: `Invalid status. Must be one of: ${validStatuses.join(', ')}`
+      });
+    }
+
+    // Find order by ID
     const order = await Order.findById(req.params.id);
     
     if (!order) {
-      return res.status(404).json({ msg: 'Order not found' });
+      return res.status(404).json({
+        success: false,
+        msg: 'Order not found'
+      });
     }
-    
+
+    // CRITICAL: Check payment status before allowing status change
+    if (order.paymentStatus === 'pending' || order.paymentStatus === 'failed') {
+      return res.status(400).json({
+        success: false,
+        msg: `Cannot update order status. Payment is ${order.paymentStatus}. Order status can only be updated after successful payment.`,
+        paymentStatus: order.paymentStatus,
+        currentStatus: order.orderStatus
+      });
+    }
+
+    // Payment is 'success' - allow status update
     order.orderStatus = orderStatus;
-    await order.save();
     
-    res.json({ msg: 'Order status updated', order });
+    // Add to status history
+    if (!order.statusHistory) {
+      order.statusHistory = [];
+    }
+    order.statusHistory.push({
+      status: orderStatus,
+      note: `Status updated to ${orderStatus} by admin on ${new Date().toLocaleString()}`,
+      updatedAt: new Date()
+    });
+    
+    // Save with validation disabled
+    await order.save({ validateBeforeSave: false });
+    
+    console.log('✅ Order status updated:', order._id);
+    
+    res.json({
+      success: true,
+      msg: `Order status updated to ${orderStatus} successfully`,
+      order
+    });
   } catch (error) {
-    console.error('Update order status error:', error);
-    res.status(500).json({ msg: 'Server error', error: error.message });
+    console.error('❌ Update order status error:', error);
+    res.status(500).json({
+      success: false,
+      msg: 'Server error while updating order status',
+      error: error.message
+    });
   }
 };
 
@@ -88,22 +160,100 @@ const updateOrderStatus = async (req, res) => {
 // @route   PUT /api/orders/admin/:id/payment
 // @access  Private/Admin
 const updatePaymentStatus = async (req, res) => {
-  const { paymentStatus } = req.body;
-  
   try {
+    console.log('📝 Update payment status - ID:', req.params.id);
+    console.log('📦 Request body:', req.body);
+    
+    const { paymentStatus } = req.body;
+    
+    if (!paymentStatus) {
+      return res.status(400).json({
+        success: false,
+        msg: 'Payment status is required'
+      });
+    }
+
+    const validPaymentStatuses = ['pending', 'success', 'failed', 'refunded'];
+    if (!validPaymentStatuses.includes(paymentStatus)) {
+      return res.status(400).json({
+        success: false,
+        msg: `Invalid payment status. Must be one of: ${validPaymentStatuses.join(', ')}`
+      });
+    }
+
     const order = await Order.findById(req.params.id);
     
     if (!order) {
-      return res.status(404).json({ msg: 'Order not found' });
+      return res.status(404).json({
+        success: false,
+        msg: 'Order not found'
+      });
     }
     
-    order.paymentStatus = paymentStatus;
-    await order.save();
+    // Store previous status for logging
+    const previousPaymentStatus = order.paymentStatus;
     
-    res.json({ msg: 'Payment status updated', order });
+    // Update payment status
+    order.paymentStatus = paymentStatus;
+    
+    // If payment becomes success, auto-update order to confirmed
+    if (paymentStatus === 'success' && order.orderStatus === 'pending') {
+      order.orderStatus = 'confirmed';
+      if (!order.statusHistory) {
+        order.statusHistory = [];
+      }
+      order.statusHistory.push({
+        status: 'confirmed',
+        note: `Auto-confirmed after successful payment (payment status: ${previousPaymentStatus} → ${paymentStatus})`,
+        updatedAt: new Date()
+      });
+      console.log('✅ Auto-confirmed order after successful payment');
+    }
+    
+    // If payment becomes failed, update order status to cancelled
+    if (paymentStatus === 'failed' && order.orderStatus === 'pending') {
+      order.orderStatus = 'cancelled';
+      if (!order.statusHistory) {
+        order.statusHistory = [];
+      }
+      order.statusHistory.push({
+        status: 'cancelled',
+        note: `Auto-cancelled due to failed payment (payment status: ${previousPaymentStatus} → ${paymentStatus})`,
+        updatedAt: new Date()
+      });
+      console.log('✅ Auto-cancelled order due to failed payment');
+    }
+    
+    // If payment becomes refunded, update order status to cancelled
+    if (paymentStatus === 'refunded') {
+      order.orderStatus = 'cancelled';
+      if (!order.statusHistory) {
+        order.statusHistory = [];
+      }
+      order.statusHistory.push({
+        status: 'cancelled',
+        note: `Order cancelled - payment refunded (payment status: ${previousPaymentStatus} → ${paymentStatus})`,
+        updatedAt: new Date()
+      });
+      console.log('✅ Order cancelled - payment refunded');
+    }
+    
+    await order.save({ validateBeforeSave: false });
+    
+    console.log('✅ Payment status updated:', order._id);
+    
+    res.json({
+      success: true,
+      msg: 'Payment status updated successfully',
+      order
+    });
   } catch (error) {
     console.error('Update payment status error:', error);
-    res.status(500).json({ msg: 'Server error', error: error.message });
+    res.status(500).json({ 
+      success: false,
+      msg: 'Server error', 
+      error: error.message 
+    });
   }
 };
 
@@ -115,15 +265,25 @@ const deleteOrder = async (req, res) => {
     const order = await Order.findById(req.params.id);
     
     if (!order) {
-      return res.status(404).json({ msg: 'Order not found' });
+      return res.status(404).json({ 
+        success: false,
+        msg: 'Order not found' 
+      });
     }
     
     await order.deleteOne();
     
-    res.json({ msg: 'Order deleted successfully' });
+    res.json({ 
+      success: true,
+      msg: 'Order deleted successfully' 
+    });
   } catch (error) {
     console.error('Delete order error:', error);
-    res.status(500).json({ msg: 'Server error', error: error.message });
+    res.status(500).json({ 
+      success: false,
+      msg: 'Server error', 
+      error: error.message 
+    });
   }
 };
 
@@ -161,19 +321,27 @@ const getOrderStats = async (req, res) => {
     ]);
     
     res.json({
-      todayOrders,
-      weekOrders,
-      monthOrders,
-      todayRevenue: todayRevenue[0]?.total || 0,
-      weekRevenue: weekRevenue[0]?.total || 0,
-      monthRevenue: monthRevenue[0]?.total || 0
+      success: true,
+      stats: {
+        todayOrders,
+        weekOrders,
+        monthOrders,
+        todayRevenue: todayRevenue[0]?.total || 0,
+        weekRevenue: weekRevenue[0]?.total || 0,
+        monthRevenue: monthRevenue[0]?.total || 0
+      }
     });
   } catch (error) {
     console.error('Get order stats error:', error);
-    res.status(500).json({ msg: 'Server error', error: error.message });
+    res.status(500).json({ 
+      success: false,
+      msg: 'Server error', 
+      error: error.message 
+    });
   }
 };
 
+// ✅ EXPORT ALL FUNCTIONS - Make sure this is at the end
 module.exports = {
   getAllOrders,
   getOrderById,
