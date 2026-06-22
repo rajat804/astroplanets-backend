@@ -488,15 +488,17 @@ currentPage.drawText('Vedic Astrology Birth Chart Report', {
   color: colors.gold,
 });
 
-// User Name
-currentPage.drawText(userName.toUpperCase(), {
-  x: pageWidth / 2 - 110,
+// User Name - Center Align
+const userNameText = userName.toUpperCase();
+const userNameWidth = fontBold.widthOfTextAtSize(userNameText, 26);
+
+currentPage.drawText(userNameText, {
+  x: (pageWidth - userNameWidth) / 2,
   y: pageHeight - 235,
   size: 26,
   font: fontBold,
   color: colors.darkRed,
 });
-
 // Birth Details Box
 const detailBoxY = pageHeight - 470;
 
