@@ -316,14 +316,15 @@ router.post('/fix-old-charts', protect, async (req, res) => {
   }
 });
 
-// ================== DOWNLOAD PDF - PRODUCTION FIXED ==================
+// ================== DOWNLOAD PDF - COMPLETE STRUCTURE ==================
+// ================== DOWNLOAD PDF - COMPLETE STRUCTURE ==================
 router.post('/download-pdf', protect, async (req, res) => {
   try {
     const { kundliData, panchangData, userDetails } = req.body;
     
     console.log('📥 Generating PDF for user:', req.user?._id || 'Unknown');
     
-    // ========== SANITIZER - REMOVES EMOJIS AND SPECIAL UNICODE ==========
+    // ========== SANITIZER ==========
     const sanitize = (text) => {
       if (text === null || text === undefined) return 'N/A';
       return String(text)
@@ -350,7 +351,7 @@ router.post('/download-pdf', protect, async (req, res) => {
       return (value !== undefined && value !== null && value !== '') ? value : defaultValue;
     };
     
-    // Get user details - sanitized
+    // Get user details
     const userName = sanitize(userDetails?.name || req.user?.fullName || req.user?.name || 'User');
     const userEmail = sanitize(userDetails?.email || req.user?.email || 'Not provided');
     
@@ -359,7 +360,7 @@ router.post('/download-pdf', protect, async (req, res) => {
     const panchang = panchangData || {};
     const birth = userDetails?.birthDetails || {};
     
-    // Birth Details - sanitized
+    // Birth Details
     const birthDate = birth.date && birth.month && birth.year 
       ? `${birth.date}/${birth.month}/${birth.year}` 
       : 'N/A';
@@ -367,7 +368,7 @@ router.post('/download-pdf', protect, async (req, res) => {
       ? `${birth.hour}:${birth.minute}` 
       : 'N/A';
     
-    // Basic Details - sanitized
+    // Basic Details
     const ascendant = sanitize(getValue(kundli, 'ascendant_sign') || getValue(kundli, 'lagna') || 'N/A');
     const ascendantLord = sanitize(getValue(kundli, 'ascendant_lord') || getValue(kundli, 'lagna_lord') || 'N/A');
     const rashi = sanitize(getValue(kundli, 'rashi') || getValue(kundli, 'sign') || 'N/A');
@@ -377,7 +378,7 @@ router.post('/download-pdf', protect, async (req, res) => {
     const nakshatraPada = sanitize(getValue(kundli, 'nakshatra_pada') || 'N/A');
     const manglik = sanitize(getValue(kundli, 'manglik') || 'No');
     
-    // Vedic Details - sanitized
+    // Vedic Details
     const yoga = sanitize(getValue(kundli, 'yoga') || 'N/A');
     const tithi = sanitize(getValue(kundli, 'tithi') || 'N/A');
     const karana = sanitize(getValue(kundli, 'karana') || 'N/A');
@@ -390,7 +391,7 @@ router.post('/download-pdf', protect, async (req, res) => {
     const paya = sanitize(getValue(kundli, 'paya') || 'N/A');
     const nameAlphabet = sanitize(getValue(kundli, 'name_alphabet') || 'N/A');
     
-    // Planets - sanitized
+    // Planets
     const planets = kundli.planets || {};
     const planetList = ['sun', 'moon', 'mars', 'mercury', 'jupiter', 'venus', 'saturn', 'rahu', 'ketu'];
     const planetNames = { 
@@ -402,12 +403,12 @@ router.post('/download-pdf', protect, async (req, res) => {
     // Houses
     const houses = kundli.houses || [];
     
-    // Dasha - sanitized
+    // Dasha
     const mahaDasha = sanitize(getValue(kundli, ['dasha', 'maha_dasha']) || 'N/A');
     const antarDasha = sanitize(getValue(kundli, ['dasha', 'antar_dasha']) || 'N/A');
     const dashaEndDate = sanitize(getValue(kundli, ['dasha', 'end_date']) || 'N/A');
     
-    // Panchang - sanitized
+    // Panchang
     const sunrise = sanitize(getValue(panchang, 'sunrise') || 'N/A');
     const sunset = sanitize(getValue(panchang, 'sunset') || 'N/A');
     const moonrise = sanitize(getValue(panchang, 'moonrise') || 'N/A');
@@ -416,20 +417,20 @@ router.post('/download-pdf', protect, async (req, res) => {
     const panchangYoga = sanitize(getValue(panchang, 'yog') || getValue(panchang, 'yoga') || 'N/A');
     const panchangKarana = sanitize(getValue(panchang, 'karan') || getValue(panchang, 'karana') || 'N/A');
     const paksha = sanitize(getValue(panchang, 'paksha') || 'N/A');
+    const rahuKaal = sanitize(getValue(panchang, 'rahukaal') || 'N/A');
+    const yamaganda = sanitize(getValue(panchang, 'yamaganda') || 'N/A');
+    const gulika = sanitize(getValue(panchang, 'gulika') || 'N/A');
     
-    // ========== CREATE PDF - USING CORE FONT ==========
-    console.log('📄 Creating PDF with pdf-lib...');
+    // ========== CREATE PDF ==========
+    console.log('📄 Creating PDF...');
     
     const pdfDoc = await PDFDocument.create();
+    const font = await pdfDoc.embedFont(StandardFonts.Helvetica);
+    const fontBold = await pdfDoc.embedFont(StandardFonts.HelveticaBold);
     
-    // ✅ CRITICAL FIX: Use Helvetica directly from pdf-lib's built-in fonts
-    // Don't embed custom fonts - they fail in serverless environments
-    const font = await pdfDoc.embedFont('Helvetica');
-    const fontBold = await pdfDoc.embedFont('Helvetica-Bold');
-    
-    // Hardcoded Letter size (612 x 792)
     const width = 612;
     const height = 792;
+    const margin = 50;
     
     // Colors
     const darkRed = rgb(0.545, 0, 0);
@@ -441,13 +442,13 @@ router.post('/download-pdf', protect, async (req, res) => {
     const lightRed = rgb(0.996, 0.949, 0.949);
     const lightGold = rgb(0.996, 0.99, 0.91);
     const lightGreen = rgb(0.94, 0.99, 0.94);
+    const lightBlue = rgb(0.94, 0.97, 0.99);
+    const lightPurple = rgb(0.97, 0.94, 0.99);
     
-    // ==================== COVER PAGE ====================
+    // ==================== PAGE 1: COVER ====================
     const page1 = pdfDoc.addPage();
-    let y = height - 50;
-    const margin = 50;
     
-    // Draw border
+    // Decorative border
     page1.drawRectangle({
       x: 30,
       y: 30,
@@ -457,27 +458,46 @@ router.post('/download-pdf', protect, async (req, res) => {
       borderWidth: 2,
     });
     
-    // Title - NO EMOJIS
-    page1.drawText('ASTROPLANETS', {
-      x: width / 2 - 120,
-      y: height - 120,
-      size: 34,
+    // Inner border
+    page1.drawRectangle({
+      x: 40,
+      y: 40,
+      width: width - 80,
+      height: height - 80,
+      borderColor: gold,
+      borderWidth: 0.5,
+    });
+    
+    // Top line
+    page1.drawLine({
+      start: { x: 50, y: height - 70 },
+      end: { x: width - 50, y: height - 70 },
+      thickness: 1,
+      color: gold,
+    });
+    
+    // Main Title
+    page1.drawText('A S T R O P L A N E T S', {
+      x: width / 2 - 160,
+      y: height - 140,
+      size: 36,
       font: fontBold,
       color: darkRed,
     });
     
-    page1.drawText('Vedic Astrology', {
-      x: width / 2 - 60,
-      y: height - 160,
+    // Subtitle
+    page1.drawText('Vedic Astrology Birth Chart Report', {
+      x: width / 2 - 130,
+      y: height - 180,
       size: 16,
       font: font,
       color: gold,
     });
     
-    // Divider line
+    // Divider
     page1.drawLine({
-      start: { x: width / 2 - 100, y: height - 190 },
-      end: { x: width / 2 + 100, y: height - 190 },
+      start: { x: width / 2 - 80, y: height - 210 },
+      end: { x: width / 2 + 80, y: height - 210 },
       thickness: 2,
       color: gold,
     });
@@ -485,45 +505,80 @@ router.post('/download-pdf', protect, async (req, res) => {
     // User Name
     page1.drawText(userName, {
       x: width / 2 - 80,
-      y: height - 240,
-      size: 24,
+      y: height - 260,
+      size: 28,
       font: fontBold,
-      color: black,
+      color: darkRed,
     });
     
-    // Birth Details - NO EMOJIS
-    const detailsY = height - 300;
+    // Birth Details Box
+    const boxY = height - 350;
+    page1.drawRectangle({
+      x: width / 2 - 180,
+      y: boxY,
+      width: 360,
+      height: 180,
+      color: lightRed,
+      borderColor: darkRed,
+      borderWidth: 1,
+    });
+    
+    let detailY = boxY + 30;
+    page1.drawText('BIRTH DETAILS', {
+      x: width / 2 - 80,
+      y: detailY,
+      size: 14,
+      font: fontBold,
+      color: darkRed,
+    });
+    detailY += 25;
+    
     page1.drawText(`Date of Birth: ${birthDate}`, {
-      x: width / 2 - 120,
-      y: detailsY,
+      x: width / 2 - 150,
+      y: detailY,
       size: 12,
       font: font,
       color: darkGray,
     });
+    detailY += 20;
+    
     page1.drawText(`Time of Birth: ${birthTime}`, {
-      x: width / 2 - 120,
-      y: detailsY - 25,
+      x: width / 2 - 150,
+      y: detailY,
       size: 12,
       font: font,
       color: darkGray,
     });
-    page1.drawText(`Rashi: ${rashi}  |  Nakshatra: ${nakshatra}`, {
-      x: width / 2 - 120,
-      y: detailsY - 50,
+    detailY += 20;
+    
+    page1.drawText(`Rashi: ${rashi}`, {
+      x: width / 2 - 150,
+      y: detailY,
       size: 12,
       font: font,
       color: darkGray,
     });
+    detailY += 20;
+    
+    page1.drawText(`Nakshatra: ${nakshatra}`, {
+      x: width / 2 - 150,
+      y: detailY,
+      size: 12,
+      font: font,
+      color: darkGray,
+    });
+    detailY += 20;
+    
     page1.drawText(`Lagna: ${ascendant}`, {
-      x: width / 2 - 120,
-      y: detailsY - 75,
+      x: width / 2 - 150,
+      y: detailY,
       size: 12,
       font: font,
       color: darkGray,
     });
     
-    // Footer - NO EMOJIS
-    page1.drawText(`Generated: ${new Date().toLocaleDateString()}`, {
+    // Footer
+    page1.drawText(`Generated on: ${new Date().toLocaleDateString()}`, {
       x: width / 2 - 80,
       y: 60,
       size: 10,
@@ -531,71 +586,69 @@ router.post('/download-pdf', protect, async (req, res) => {
       color: gray,
     });
     page1.drawText(`(c) ${new Date().getFullYear()} AstroPlanets - All Rights Reserved`, {
-      x: width / 2 - 140,
+      x: width / 2 - 150,
       y: 40,
       size: 10,
       font: font,
       color: gray,
     });
     
-    // ==================== DATA PAGE ====================
+    // ==================== PAGE 2: KUNDLI DATA ====================
     const page2 = pdfDoc.addPage();
     let y2 = height - 40;
     
-    // Header - NO EMOJIS
+    // Header
     page2.drawText('ASTROPLANETS', {
       x: margin,
       y: y2,
-      size: 20,
+      size: 18,
       font: fontBold,
       color: darkRed,
     });
-    y2 -= 30;
+    y2 -= 25;
     
-    page2.drawText(userName, {
+    page2.drawText(`Kundli Report: ${userName}`, {
       x: margin,
       y: y2,
-      size: 14,
+      size: 12,
       font: font,
       color: gold,
     });
     y2 -= 35;
     
-    // ======== LAGNA ========
+    // ===== 1. LAGNA =====
     page2.drawRectangle({
       x: margin,
-      y: y2 - 60,
+      y: y2 - 55,
       width: width - 2 * margin,
-      height: 70,
-      color: lightRed,
-      borderColor: darkRed,
-      borderWidth: 1,
+      height: 65,
+      color: darkRed,
     });
     
     page2.drawText('LAGNA (ASCENDANT)', {
-      x: width / 2 - 80,
-      y: y2 - 20,
+      x: width / 2 - 85,
+      y: y2 - 22,
       size: 12,
       font: fontBold,
-      color: darkRed,
+      color: white,
     });
     page2.drawText(ascendant, {
       x: width / 2 - 60,
-      y: y2 - 50,
-      size: 24,
+      y: y2 - 48,
+      size: 26,
       font: fontBold,
-      color: darkRed,
+      color: gold,
     });
     page2.drawText(`Lord: ${ascendantLord}`, {
       x: width / 2 - 40,
-      y: y2 - 70,
+      y: y2 - 62,
       size: 11,
       font: font,
-      color: darkGray,
+      color: white,
     });
-    y2 -= 80;
+    y2 -= 70;
     
-    // ======== RASHI & NAKSHATRA ========
+    // ===== 2. RASHI & NAKSHATRA =====
     page2.drawText('RASHI & NAKSHATRA', {
       x: margin,
       y: y2,
@@ -603,59 +656,53 @@ router.post('/download-pdf', protect, async (req, res) => {
       font: fontBold,
       color: darkRed,
     });
-    y2 -= 25;
-    
-    page2.drawRectangle({
-      x: margin,
-      y: y2 - 80,
-      width: width - 2 * margin,
-      height: 85,
-      borderColor: black,
-      borderWidth: 1,
-    });
-    
-    // Row 1
-    page2.drawText('Rashi (Moon Sign)', { x: margin + 10, y: y2 - 15, size: 11, font: fontBold, color: darkGray });
-    page2.drawText(rashi, { x: width / 2, y: y2 - 15, size: 11, font: font, color: black });
     y2 -= 20;
-    page2.drawLine({
-      start: { x: margin + 10, y: y2 + 5 },
-      end: { x: width - margin - 10, y: y2 + 5 },
-      thickness: 1,
-      color: gray,
-    });
     
-    // Row 2
-    page2.drawText('Sign Lord', { x: margin + 10, y: y2 - 15, size: 11, font: fontBold, color: darkGray });
-    page2.drawText(signLord, { x: width / 2, y: y2 - 15, size: 11, font: font, color: black });
-    y2 -= 20;
-    page2.drawLine({
-      start: { x: margin + 10, y: y2 + 5 },
-      end: { x: width - margin - 10, y: y2 + 5 },
-      thickness: 1,
-      color: gray,
-    });
+    const rashiData = [
+      ['Rashi (Moon Sign)', rashi],
+      ['Sign Lord', signLord],
+      ['Nakshatra (Birth Star)', nakshatra],
+      ['Nakshatra Lord', nakshatraLord],
+      ['Pada / Charan', nakshatraPada]
+    ];
     
-    // Row 3
-    page2.drawText('Nakshatra (Birth Star)', { x: margin + 10, y: y2 - 15, size: 11, font: fontBold, color: darkGray });
-    page2.drawText(nakshatra, { x: width / 2, y: y2 - 15, size: 11, font: font, color: black });
-    y2 -= 20;
-    page2.drawLine({
-      start: { x: margin + 10, y: y2 + 5 },
-      end: { x: width - margin - 10, y: y2 + 5 },
-      thickness: 1,
-      color: gray,
-    });
+    const boxW = (width - 2 * margin - 20) / 2;
+    let rx = margin;
+    let ry = y2 - 20;
+    let rc = 0;
     
-    // Row 4
-    page2.drawText('Nakshatra Lord / Pada', { x: margin + 10, y: y2 - 15, size: 11, font: fontBold, color: darkGray });
-    page2.drawText(`${nakshatraLord} / ${nakshatraPada}`, { x: width / 2, y: y2 - 15, size: 11, font: font, color: black });
-    y2 -= 25;
+    for (const [label, value] of rashiData) {
+      const xPos = rc % 2 === 0 ? margin : margin + boxW + 20;
+      const yPos = ry;
+      
+      page2.drawRectangle({
+        x: xPos,
+        y: yPos - 20,
+        width: boxW,
+        height: 25,
+        color: lightBlue,
+        borderColor: gray,
+        borderWidth: 0.5,
+      });
+      
+      page2.drawText(`${label}: ${value}`, {
+        x: xPos + 8,
+        y: yPos - 14,
+        size: 10,
+        font: font,
+        color: black,
+      });
+      
+      rc++;
+      if (rc % 2 === 0) {
+        ry -= 30;
+      }
+    }
+    y2 = ry - 15;
     
-    // ======== MANGLIK ========
+    // ===== 3. MANGLIK DOSHA =====
     const isManglik = manglik === 'Yes' || manglik === 'Manglik';
-    const manglikBg = isManglik ? darkRed : rgb(0.91, 0.94, 0.91);
-    const manglikTextColor = isManglik ? white : black;
+    const manglikBg = isManglik ? rgb(0.8, 0.1, 0.1) : rgb(0.1, 0.6, 0.1);
     
     page2.drawRectangle({
       x: margin,
@@ -663,19 +710,18 @@ router.post('/download-pdf', protect, async (req, res) => {
       width: width - 2 * margin,
       height: 40,
       color: manglikBg,
-      borderColor: isManglik ? darkRed : rgb(0, 0.6, 0),
-      borderWidth: 1,
     });
+    
     page2.drawText(`MANGAL DOSHA: ${isManglik ? 'Manglik' : 'Non-Manglik'}`, {
-      x: width / 2 - 80,
-      y: y2 - 22,
-      size: 14,
+      x: width / 2 - 90,
+      y: y2 - 23,
+      size: 16,
       font: fontBold,
-      color: manglikTextColor,
+      color: white,
     });
     y2 -= 45;
     
-    // ======== PLANETS TABLE ========
+    // ===== 4. PLANETS TABLE =====
     page2.drawText('PLANETARY POSITIONS', {
       x: margin,
       y: y2,
@@ -683,85 +729,78 @@ router.post('/download-pdf', protect, async (req, res) => {
       font: fontBold,
       color: darkRed,
     });
-    y2 -= 25;
+    y2 -= 20;
     
-    // Table header
-    const tableX = margin;
-    const tableY = y2;
-    const tableWidth = width - 2 * margin;
-    const colWidths = [70, 60, 50, 50, 60];
+    const tX = margin;
+    const tY = y2;
+    const tW = width - 2 * margin;
+    const cW = [70, 65, 50, 50, 65];
     
+    // Header
     page2.drawRectangle({
-      x: tableX,
-      y: tableY - 25,
-      width: tableWidth,
+      x: tX,
+      y: tY - 22,
+      width: tW,
       height: 25,
       color: darkRed,
     });
     
     const headers = ['Planet', 'Sign', 'Degree', 'House', 'Retrograde'];
-    let hX = tableX + 5;
+    let hx = tX + 5;
     for (let i = 0; i < headers.length; i++) {
       page2.drawText(headers[i], {
-        x: hX,
-        y: tableY - 18,
+        x: hx,
+        y: tY - 15,
         size: 10,
         font: fontBold,
         color: white,
       });
-      hX += colWidths[i];
+      hx += cW[i];
     }
     
     y2 -= 25;
-    let rowY2 = y2;
+    let rowY = y2;
     
-    for (const planet of planetList) {
+    for (let i = 0; i < planetList.length; i++) {
+      const planet = planetList[i];
       const pData = planets[planet] || {};
-      const isRetrograde = pData.retrograde ? 'Yes' : 'No';
+      const isRetro = pData.retrograde ? 'Yes' : 'No';
       
-      // Row background
-      const rowBg = planetList.indexOf(planet) % 2 === 0 ? rgb(0.98, 0.975, 0.96) : white;
+      const rowBg = i % 2 === 0 ? rgb(0.98, 0.975, 0.96) : white;
       page2.drawRectangle({
-        x: tableX,
-        y: rowY2 - 18,
-        width: tableWidth,
+        x: tX,
+        y: rowY - 18,
+        width: tW,
         height: 20,
         color: rowBg,
         borderColor: gray,
         borderWidth: 0.5,
       });
       
-      const planetName = sanitize(pData.name || planetNames[planet] || planet);
-      const planetSign = sanitize(pData.sign || 'N/A');
-      const planetDegree = sanitize(pData.degree || 'N/A');
-      const planetHouse = sanitize(pData.house || 'N/A');
-      
       const rowData = [
-        planetName,
-        planetSign,
-        `${planetDegree}°`,
-        planetHouse,
-        isRetrograde
+        planetNames[planet] || planet,
+        sanitize(pData.sign || 'N/A'),
+        `${sanitize(pData.degree || 'N/A')}°`,
+        sanitize(pData.house || 'N/A'),
+        isRetro
       ];
       
-      let rX = tableX + 5;
-      for (let i = 0; i < rowData.length; i++) {
-        page2.drawText(rowData[i], {
-          x: rX,
-          y: rowY2 - 13,
+      let rx2 = tX + 5;
+      for (let j = 0; j < rowData.length; j++) {
+        page2.drawText(rowData[j], {
+          x: rx2,
+          y: rowY - 13,
           size: 9,
-          font: i === 0 ? fontBold : font,
+          font: j === 0 ? fontBold : font,
           color: black,
         });
-        rX += colWidths[i];
+        rx2 += cW[j];
       }
-      
-      rowY2 -= 20;
+      rowY -= 20;
     }
+    y2 = rowY - 10;
     
-    y2 = rowY2 - 10;
-    
-    // ======== HOUSES TABLE ========
+    // ===== 5. HOUSES TABLE =====
     if (houses.length > 0) {
       page2.drawText('HOUSES (BHAVAS)', {
         x: margin,
@@ -770,33 +809,32 @@ router.post('/download-pdf', protect, async (req, res) => {
         font: fontBold,
         color: darkRed,
       });
-      y2 -= 25;
+      y2 -= 20;
       
-      const hTableX = margin;
-      const hTableY = y2;
-      const hTableWidth = width - 2 * margin;
-      const hColWidths = [80, 100, 100];
+      const hX = margin;
+      const hY = y2;
+      const hW = width - 2 * margin;
+      const hC = [80, 100, 100];
       
-      // Header
       page2.drawRectangle({
-        x: hTableX,
-        y: hTableY - 20,
-        width: hTableWidth,
+        x: hX,
+        y: hY - 20,
+        width: hW,
         height: 22,
         color: darkRed,
       });
       
       const hHeaders = ['House', 'Sign', 'Lord'];
-      let hhX = hTableX + 5;
+      let hhx = hX + 5;
       for (let i = 0; i < hHeaders.length; i++) {
         page2.drawText(hHeaders[i], {
-          x: hhX,
-          y: hTableY - 14,
+          x: hhx,
+          y: hY - 14,
           size: 10,
           font: fontBold,
           color: white,
         });
-        hhX += hColWidths[i];
+        hhx += hC[i];
       }
       
       y2 -= 22;
@@ -810,9 +848,9 @@ router.post('/download-pdf', protect, async (req, res) => {
         
         const rowBg = i % 2 === 0 ? rgb(0.98, 0.975, 0.96) : white;
         page2.drawRectangle({
-          x: hTableX,
+          x: hX,
           y: hRowY - 18,
-          width: hTableWidth,
+          width: hW,
           height: 20,
           color: rowBg,
           borderColor: gray,
@@ -820,23 +858,23 @@ router.post('/download-pdf', protect, async (req, res) => {
         });
         
         const hRowData = [`House ${houseNum}`, houseSign, houseLord];
-        let hrX = hTableX + 5;
+        let hrx = hX + 5;
         for (let j = 0; j < hRowData.length; j++) {
           page2.drawText(hRowData[j], {
-            x: hrX,
+            x: hrx,
             y: hRowY - 13,
             size: 9,
             font: j === 0 ? fontBold : font,
             color: black,
           });
-          hrX += hColWidths[j];
+          hrx += hC[j];
         }
         hRowY -= 20;
       }
       y2 = hRowY - 10;
     }
     
-    // ======== VEDIC DETAILS ========
+    // ===== 6. VEDIC DETAILS =====
     page2.drawText('VEDIC DETAILS', {
       x: margin,
       y: y2,
@@ -844,7 +882,7 @@ router.post('/download-pdf', protect, async (req, res) => {
       font: fontBold,
       color: darkRed,
     });
-    y2 -= 25;
+    y2 -= 20;
     
     const vedicData = [
       ['Yoga', yoga],
@@ -861,49 +899,41 @@ router.post('/download-pdf', protect, async (req, res) => {
       ['Alphabet', nameAlphabet]
     ];
     
-    const colWidth = (width - 2 * margin) / 2 - 10;
-    let rowY = y2;
-    let colCount = 0;
+    const vCW = (width - 2 * margin - 15) / 3;
+    let vRow = y2 - 18;
+    let vCol = 0;
     
     for (const [label, value] of vedicData) {
-      const xPos = colCount === 0 ? margin : margin + colWidth + 10;
-      const yPos = rowY;
+      const xPos = margin + (vCol * (vCW + 7));
+      const yPos = vRow;
       
       page2.drawRectangle({
         x: xPos,
-        y: yPos - 20,
-        width: colWidth,
+        y: yPos - 18,
+        width: vCW,
         height: 22,
-        color: rgb(0.98, 0.975, 0.96),
-        borderColor: rgb(0.91, 0.89, 0.87),
-        borderWidth: 1,
+        color: lightPurple,
+        borderColor: gray,
+        borderWidth: 0.5,
       });
       
-      page2.drawText(`${label}:`, {
+      page2.drawText(`${label}: ${value}`, {
         x: xPos + 5,
-        y: yPos - 15,
-        size: 9,
-        font: fontBold,
-        color: darkGray,
-      });
-      page2.drawText(value, {
-        x: xPos + colWidth - 60,
-        y: yPos - 15,
+        y: yPos - 13,
         size: 9,
         font: font,
         color: black,
       });
       
-      colCount++;
-      if (colCount === 2) {
-        colCount = 0;
-        rowY -= 28;
+      vCol++;
+      if (vCol === 3) {
+        vCol = 0;
+        vRow -= 26;
       }
     }
+    y2 = vRow - 10;
     
-    y2 = rowY - 15;
-    
-    // ======== DASHA ========
+    // ===== 7. DASHA =====
     page2.drawText('CURRENT VIMSHOTTARI DASHA', {
       x: margin,
       y: y2,
@@ -911,42 +941,42 @@ router.post('/download-pdf', protect, async (req, res) => {
       font: fontBold,
       color: darkRed,
     });
-    y2 -= 25;
+    y2 -= 20;
     
     page2.drawRectangle({
       x: margin,
-      y: y2 - 40,
+      y: y2 - 35,
       width: width - 2 * margin,
-      height: 45,
+      height: 40,
       color: lightGold,
-      borderColor: rgb(0.996, 0.95, 0.78),
+      borderColor: gold,
       borderWidth: 1,
     });
     
     page2.drawText(`Maha Dasha: ${mahaDasha}`, {
       x: width / 2 - 130,
-      y: y2 - 28,
+      y: y2 - 24,
       size: 11,
       font: fontBold,
       color: darkGray,
     });
     page2.drawText(`Antar Dasha: ${antarDasha}`, {
       x: width / 2 - 20,
-      y: y2 - 28,
+      y: y2 - 24,
       size: 11,
       font: fontBold,
       color: darkGray,
     });
     page2.drawText(`Valid Until: ${dashaEndDate}`, {
       x: width / 2 + 80,
-      y: y2 - 28,
+      y: y2 - 24,
       size: 11,
       font: fontBold,
       color: darkGray,
     });
     y2 -= 50;
     
-    // ======== PANCHANG ========
+    // ===== 8. PANCHANG =====
     page2.drawText('DAILY PANCHANG', {
       x: margin,
       y: y2,
@@ -954,7 +984,7 @@ router.post('/download-pdf', protect, async (req, res) => {
       font: fontBold,
       color: darkRed,
     });
-    y2 -= 25;
+    y2 -= 20;
     
     const panchangDataList = [
       ['Sunrise', sunrise],
@@ -967,35 +997,28 @@ router.post('/download-pdf', protect, async (req, res) => {
       ['Paksha', paksha]
     ];
     
-    let pY = y2;
+    const pCW = (width - 2 * margin - 10) / 2;
+    let pRow = y2 - 18;
     let pCol = 0;
-    const pColWidth = (width - 2 * margin) / 2 - 10;
     
     for (const [label, value] of panchangDataList) {
-      const xPos = pCol === 0 ? margin : margin + pColWidth + 10;
-      const yPos = pY;
+      const xPos = pCol === 0 ? margin : margin + pCW + 10;
+      const yPos = pRow;
       
       page2.drawRectangle({
         x: xPos,
         y: yPos - 18,
-        width: pColWidth,
-        height: 20,
+        width: pCW,
+        height: 22,
         color: lightGreen,
         borderColor: rgb(0.86, 0.97, 0.86),
-        borderWidth: 1,
+        borderWidth: 0.5,
       });
       
-      page2.drawText(`${label}:`, {
+      page2.drawText(`${label}: ${value}`, {
         x: xPos + 5,
         y: yPos - 13,
-        size: 9,
-        font: fontBold,
-        color: darkGray,
-      });
-      page2.drawText(value, {
-        x: xPos + pColWidth - 60,
-        y: yPos - 13,
-        size: 9,
+        size: 10,
         font: font,
         color: black,
       });
@@ -1003,11 +1026,62 @@ router.post('/download-pdf', protect, async (req, res) => {
       pCol++;
       if (pCol === 2) {
         pCol = 0;
-        pY -= 25;
+        pRow -= 26;
       }
     }
+    y2 = pRow - 10;
     
-    // ======== FOOTER ========
+    // ===== 9. MUHURAT TIMINGS =====
+    if (rahuKaal !== 'N/A' || yamaganda !== 'N/A' || gulika !== 'N/A') {
+      page2.drawText('MUHURAT TIMINGS', {
+        x: margin,
+        y: y2,
+        size: 14,
+        font: fontBold,
+        color: darkRed,
+      });
+      y2 -= 20;
+      
+      const mData = [
+        ['Rahu Kaal', rahuKaal, '#ff6b6b'],
+        ['Yamaganda', yamaganda, '#ffd93d'],
+        ['Gulika', gulika, '#6bcb77']
+      ];
+      
+      const mCW = (width - 2 * margin - 20) / 3;
+      let mRow = y2 - 18;
+      
+      for (const [label, value, color] of mData) {
+        const xPos = margin + (mData.indexOf([label, value, color]) * (mCW + 10));
+        const yPos = mRow;
+        
+        const bgColor = color === '#ff6b6b' ? rgb(1, 0.42, 0.42) : 
+                        color === '#ffd93d' ? rgb(1, 0.85, 0.24) : 
+                        rgb(0.42, 0.8, 0.47);
+        
+        page2.drawRectangle({
+          x: xPos,
+          y: yPos - 18,
+          width: mCW,
+          height: 22,
+          color: bgColor,
+          borderColor: gray,
+          borderWidth: 0.5,
+        });
+        
+        const textColor = color === '#ff6b6b' ? white : black;
+        page2.drawText(`${label}: ${value}`, {
+          x: xPos + 5,
+          y: yPos - 13,
+          size: 10,
+          font: fontBold,
+          color: textColor,
+        });
+      }
+      y2 = mRow - 25;
+    }
+    
+    // ===== FOOTER =====
     const footerY = 30;
     page2.drawText('This report is based on Vedic astrology calculations.', {
       x: width / 2 - 130,
@@ -1043,6 +1117,8 @@ router.post('/download-pdf', protect, async (req, res) => {
     });
   }
 });
+
+
 
 // ================== SAVE PURCHASED KUNDLI ==================
 router.post('/save-purchased-kundli', protect, async (req, res) => {
