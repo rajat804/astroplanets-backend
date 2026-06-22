@@ -316,24 +316,24 @@ router.post('/fix-old-charts', protect, async (req, res) => {
   }
 });
 
-// ================== DOWNLOAD PDF - COMPLETE STRUCTURE ==================
-// ================== DOWNLOAD PDF - COMPLETE STRUCTURE ==================
+// ================== DOWNLOAD PDF - VERCEL COMPATIBLE (MULTI-PAGE) ==================
+// ================== DOWNLOAD PDF - FINAL WORKING ==================
 router.post('/download-pdf', protect, async (req, res) => {
   try {
     const { kundliData, panchangData, userDetails } = req.body;
     
     console.log('📥 Generating PDF for user:', req.user?._id || 'Unknown');
-    
-    // ========== SANITIZER ==========
-    const sanitize = (text) => {
+
+    // ========== SANITIZER - Removes ALL special characters ==========
+    const cleanText = (text) => {
       if (text === null || text === undefined) return 'N/A';
+      // Remove emojis, special symbols, and non-ASCII characters
       return String(text)
-        .replace(/[\u{1F300}-\u{1FAFF}\u{2600}-\u{27BF}\u{2190}-\u{21FF}\u{2300}-\u{23FF}\u{FE0F}]/gu, '')
-        .replace(/[✦✧✩✪✫✬✭✮✯✰✱✲✳✴✵✶✷✸✹✺✻✼✽✾✿❀❁❂❃]/g, '')
-        .trim();
+        .replace(/[^\x00-\x7F]/g, '') // Remove all non-ASCII characters
+        .replace(/[^a-zA-Z0-9\s\/\:\.\-\(\)]/g, '') // Only allow safe chars
+        .trim() || 'N/A';
     };
-    
-    // Helper function
+
     const getValue = (obj, key, defaultValue = 'N/A') => {
       if (!obj) return defaultValue;
       if (Array.isArray(key)) {
@@ -341,783 +341,405 @@ router.post('/download-pdf', protect, async (req, res) => {
         for (const k of key) {
           if (current && current[k] !== undefined && current[k] !== null && current[k] !== '') {
             current = current[k];
-          } else {
-            return defaultValue;
-          }
+          } else return defaultValue;
         }
         return current;
       }
       const value = obj[key];
       return (value !== undefined && value !== null && value !== '') ? value : defaultValue;
     };
-    
-    // Get user details
-    const userName = sanitize(userDetails?.name || req.user?.fullName || req.user?.name || 'User');
-    const userEmail = sanitize(userDetails?.email || req.user?.email || 'Not provided');
-    
-    // Extract data
+
+    // ========== GET ALL DATA ==========
+    const userName = cleanText(userDetails?.name || req.user?.fullName || req.user?.name || 'User');
+    const birth = userDetails?.birthDetails || {};
+
+    const birthDate = birth.date && birth.month && birth.year 
+      ? `${birth.date}/${birth.month}/${birth.year}` : 'N/A';
+    const birthTime = birth.hour && birth.minute 
+      ? `${birth.hour}:${birth.minute}` : 'N/A';
+    // const birthPlace = cleanText(birth.place || birth.location || 'N/A');
+
     const kundli = kundliData || {};
     const panchang = panchangData || {};
-    const birth = userDetails?.birthDetails || {};
-    
-    // Birth Details
-    const birthDate = birth.date && birth.month && birth.year 
-      ? `${birth.date}/${birth.month}/${birth.year}` 
-      : 'N/A';
-    const birthTime = birth.hour && birth.minute 
-      ? `${birth.hour}:${birth.minute}` 
-      : 'N/A';
-    
+
     // Basic Details
-    const ascendant = sanitize(getValue(kundli, 'ascendant_sign') || getValue(kundli, 'lagna') || 'N/A');
-    const ascendantLord = sanitize(getValue(kundli, 'ascendant_lord') || getValue(kundli, 'lagna_lord') || 'N/A');
-    const rashi = sanitize(getValue(kundli, 'rashi') || getValue(kundli, 'sign') || 'N/A');
-    const signLord = sanitize(getValue(kundli, 'sign_lord') || 'N/A');
-    const nakshatra = sanitize(getValue(kundli, 'nakshatra') || 'N/A');
-    const nakshatraLord = sanitize(getValue(kundli, 'nakshatra_lord') || 'N/A');
-    const nakshatraPada = sanitize(getValue(kundli, 'nakshatra_pada') || 'N/A');
-    const manglik = sanitize(getValue(kundli, 'manglik') || 'No');
-    
+    const ascendant = cleanText(getValue(kundli, 'ascendant_sign') || getValue(kundli, 'lagna') || 'N/A');
+    const ascendantLord = cleanText(getValue(kundli, 'ascendant_lord') || getValue(kundli, 'lagna_lord') || 'N/A');
+    const rashi = cleanText(getValue(kundli, 'rashi') || getValue(kundli, 'sign') || 'N/A');
+    const signLord = cleanText(getValue(kundli, 'sign_lord') || 'N/A');
+    const nakshatra = cleanText(getValue(kundli, 'nakshatra') || 'N/A');
+    const nakshatraLord = cleanText(getValue(kundli, 'nakshatra_lord') || 'N/A');
+    const nakshatraPada = cleanText(getValue(kundli, 'nakshatra_pada') || 'N/A');
+    const manglik = cleanText(getValue(kundli, 'manglik') || 'No');
+
     // Vedic Details
-    const yoga = sanitize(getValue(kundli, 'yoga') || 'N/A');
-    const tithi = sanitize(getValue(kundli, 'tithi') || 'N/A');
-    const karana = sanitize(getValue(kundli, 'karana') || 'N/A');
-    const gan = sanitize(getValue(kundli, 'gan') || 'N/A');
-    const nadi = sanitize(getValue(kundli, 'nadi') || 'N/A');
-    const varna = sanitize(getValue(kundli, 'varna') || 'N/A');
-    const vashya = sanitize(getValue(kundli, 'vashya') || 'N/A');
-    const yoni = sanitize(getValue(kundli, 'yoni') || 'N/A');
-    const tatva = sanitize(getValue(kundli, 'tatva') || 'N/A');
-    const paya = sanitize(getValue(kundli, 'paya') || 'N/A');
-    const nameAlphabet = sanitize(getValue(kundli, 'name_alphabet') || 'N/A');
-    
+    const yoga = cleanText(getValue(kundli, 'yoga') || 'N/A');
+    const tithi = cleanText(getValue(kundli, 'tithi') || 'N/A');
+    const karana = cleanText(getValue(kundli, 'karana') || 'N/A');
+    const gan = cleanText(getValue(kundli, 'gan') || 'N/A');
+    const nadi = cleanText(getValue(kundli, 'nadi') || 'N/A');
+    const varna = cleanText(getValue(kundli, 'varna') || 'N/A');
+    const vashya = cleanText(getValue(kundli, 'vashya') || 'N/A');
+    const yoni = cleanText(getValue(kundli, 'yoni') || 'N/A');
+    const tatva = cleanText(getValue(kundli, 'tatva') || 'N/A');
+    const paya = cleanText(getValue(kundli, 'paya') || 'N/A');
+    const nameAlphabet = cleanText(getValue(kundli, 'name_alphabet') || 'N/A');
+
     // Planets
     const planets = kundli.planets || {};
     const planetList = ['sun', 'moon', 'mars', 'mercury', 'jupiter', 'venus', 'saturn', 'rahu', 'ketu'];
-    const planetNames = { 
-      sun: 'Sun', moon: 'Moon', mars: 'Mars', mercury: 'Mercury', 
-      jupiter: 'Jupiter', venus: 'Venus', saturn: 'Saturn', 
-      rahu: 'Rahu', ketu: 'Ketu' 
-    };
-    
-    // Houses
+    const planetNames = { sun: 'Sun', moon: 'Moon', mars: 'Mars', mercury: 'Mercury', jupiter: 'Jupiter', venus: 'Venus', saturn: 'Saturn', rahu: 'Rahu', ketu: 'Ketu' };
     const houses = kundli.houses || [];
-    
+
     // Dasha
-    const mahaDasha = sanitize(getValue(kundli, ['dasha', 'maha_dasha']) || 'N/A');
-    const antarDasha = sanitize(getValue(kundli, ['dasha', 'antar_dasha']) || 'N/A');
-    const dashaEndDate = sanitize(getValue(kundli, ['dasha', 'end_date']) || 'N/A');
-    
+    const mahaDasha = cleanText(getValue(kundli, ['dasha', 'maha_dasha']) || 'N/A');
+    const antarDasha = cleanText(getValue(kundli, ['dasha', 'antar_dasha']) || 'N/A');
+    const dashaEndDate = cleanText(getValue(kundli, ['dasha', 'end_date']) || 'N/A');
+
     // Panchang
-    const sunrise = sanitize(getValue(panchang, 'sunrise') || 'N/A');
-    const sunset = sanitize(getValue(panchang, 'sunset') || 'N/A');
-    const moonrise = sanitize(getValue(panchang, 'moonrise') || 'N/A');
-    const panchangTithi = sanitize(getValue(panchang, 'tithi') || 'N/A');
-    const panchangNakshatra = sanitize(getValue(panchang, 'nakshatra') || 'N/A');
-    const panchangYoga = sanitize(getValue(panchang, 'yog') || getValue(panchang, 'yoga') || 'N/A');
-    const panchangKarana = sanitize(getValue(panchang, 'karan') || getValue(panchang, 'karana') || 'N/A');
-    const paksha = sanitize(getValue(panchang, 'paksha') || 'N/A');
-    const rahuKaal = sanitize(getValue(panchang, 'rahukaal') || 'N/A');
-    const yamaganda = sanitize(getValue(panchang, 'yamaganda') || 'N/A');
-    const gulika = sanitize(getValue(panchang, 'gulika') || 'N/A');
-    
+    const sunrise = cleanText(getValue(panchang, 'sunrise') || 'N/A');
+    const sunset = cleanText(getValue(panchang, 'sunset') || 'N/A');
+    const moonrise = cleanText(getValue(panchang, 'moonrise') || 'N/A');
+    const panchangTithi = cleanText(getValue(panchang, 'tithi') || 'N/A');
+    const panchangNakshatra = cleanText(getValue(panchang, 'nakshatra') || 'N/A');
+    const panchangYoga = cleanText(getValue(panchang, 'yog') || getValue(panchang, 'yoga') || 'N/A');
+    const panchangKarana = cleanText(getValue(panchang, 'karan') || getValue(panchang, 'karana') || 'N/A');
+    const paksha = cleanText(getValue(panchang, 'paksha') || 'N/A');
+    const rahuKaal = cleanText(getValue(panchang, 'rahukaal') || 'N/A');
+    const yamaganda = cleanText(getValue(panchang, 'yamaganda') || 'N/A');
+    const gulika = cleanText(getValue(panchang, 'gulika') || 'N/A');
+
     // ========== CREATE PDF ==========
-    console.log('📄 Creating PDF...');
-    
     const pdfDoc = await PDFDocument.create();
     const font = await pdfDoc.embedFont(StandardFonts.Helvetica);
     const fontBold = await pdfDoc.embedFont(StandardFonts.HelveticaBold);
-    
-    const width = 612;
-    const height = 792;
-    const margin = 50;
-    
-    // Colors
-    const darkRed = rgb(0.545, 0, 0);
-    const gold = rgb(0.831, 0.627, 0.09);
-    const black = rgb(0, 0, 0);
-    const gray = rgb(0.4, 0.4, 0.4);
-    const darkGray = rgb(0.2, 0.2, 0.2);
-    const white = rgb(1, 1, 1);
-    const lightRed = rgb(0.996, 0.949, 0.949);
-    const lightGold = rgb(0.996, 0.99, 0.91);
-    const lightGreen = rgb(0.94, 0.99, 0.94);
-    const lightBlue = rgb(0.94, 0.97, 0.99);
-    const lightPurple = rgb(0.97, 0.94, 0.99);
-    
-    // ==================== PAGE 1: COVER ====================
-    const page1 = pdfDoc.addPage();
-    
-    // Decorative border
-    page1.drawRectangle({
-      x: 30,
-      y: 30,
-      width: width - 60,
-      height: height - 60,
-      borderColor: gold,
-      borderWidth: 2,
-    });
-    
-    // Inner border
-    page1.drawRectangle({
-      x: 40,
-      y: 40,
-      width: width - 80,
-      height: height - 80,
-      borderColor: gold,
-      borderWidth: 0.5,
-    });
-    
-    // Top line
-    page1.drawLine({
-      start: { x: 50, y: height - 70 },
-      end: { x: width - 50, y: height - 70 },
-      thickness: 1,
-      color: gold,
-    });
-    
-    // Main Title
-    page1.drawText('A S T R O P L A N E T S', {
-      x: width / 2 - 160,
-      y: height - 140,
-      size: 36,
-      font: fontBold,
-      color: darkRed,
-    });
-    
-    // Subtitle
-    page1.drawText('Vedic Astrology Birth Chart Report', {
-      x: width / 2 - 130,
-      y: height - 180,
-      size: 16,
-      font: font,
-      color: gold,
-    });
-    
-    // Divider
-    page1.drawLine({
-      start: { x: width / 2 - 80, y: height - 210 },
-      end: { x: width / 2 + 80, y: height - 210 },
-      thickness: 2,
-      color: gold,
-    });
-    
-    // User Name
-    page1.drawText(userName, {
-      x: width / 2 - 80,
-      y: height - 260,
-      size: 28,
-      font: fontBold,
-      color: darkRed,
-    });
-    
-    // Birth Details Box
-    const boxY = height - 350;
-    page1.drawRectangle({
-      x: width / 2 - 180,
-      y: boxY,
-      width: 360,
-      height: 180,
-      color: lightRed,
-      borderColor: darkRed,
-      borderWidth: 1,
-    });
-    
-    let detailY = boxY + 30;
-    page1.drawText('BIRTH DETAILS', {
-      x: width / 2 - 80,
-      y: detailY,
-      size: 14,
-      font: fontBold,
-      color: darkRed,
-    });
-    detailY += 25;
-    
-    page1.drawText(`Date of Birth: ${birthDate}`, {
-      x: width / 2 - 150,
-      y: detailY,
-      size: 12,
-      font: font,
-      color: darkGray,
-    });
-    detailY += 20;
-    
-    page1.drawText(`Time of Birth: ${birthTime}`, {
-      x: width / 2 - 150,
-      y: detailY,
-      size: 12,
-      font: font,
-      color: darkGray,
-    });
-    detailY += 20;
-    
-    page1.drawText(`Rashi: ${rashi}`, {
-      x: width / 2 - 150,
-      y: detailY,
-      size: 12,
-      font: font,
-      color: darkGray,
-    });
-    detailY += 20;
-    
-    page1.drawText(`Nakshatra: ${nakshatra}`, {
-      x: width / 2 - 150,
-      y: detailY,
-      size: 12,
-      font: font,
-      color: darkGray,
-    });
-    detailY += 20;
-    
-    page1.drawText(`Lagna: ${ascendant}`, {
-      x: width / 2 - 150,
-      y: detailY,
-      size: 12,
-      font: font,
-      color: darkGray,
-    });
-    
-    // Footer
-    page1.drawText(`Generated on: ${new Date().toLocaleDateString()}`, {
-      x: width / 2 - 80,
-      y: 60,
-      size: 10,
-      font: font,
-      color: gray,
-    });
-    page1.drawText(`(c) ${new Date().getFullYear()} AstroPlanets - All Rights Reserved`, {
-      x: width / 2 - 150,
-      y: 40,
-      size: 10,
-      font: font,
-      color: gray,
-    });
-    
-    // ==================== PAGE 2: KUNDLI DATA ====================
-    const page2 = pdfDoc.addPage();
-    let y2 = height - 40;
-    
-    // Header
-    page2.drawText('ASTROPLANETS', {
-      x: margin,
-      y: y2,
-      size: 18,
-      font: fontBold,
-      color: darkRed,
-    });
-    y2 -= 25;
-    
-    page2.drawText(`Kundli Report: ${userName}`, {
-      x: margin,
-      y: y2,
-      size: 12,
-      font: font,
-      color: gold,
-    });
-    y2 -= 35;
-    
-    // ===== 1. LAGNA =====
-    page2.drawRectangle({
-      x: margin,
-      y: y2 - 55,
-      width: width - 2 * margin,
-      height: 65,
-      color: darkRed,
-    });
-    
-    page2.drawText('LAGNA (ASCENDANT)', {
-      x: width / 2 - 85,
-      y: y2 - 22,
-      size: 12,
-      font: fontBold,
-      color: white,
-    });
-    page2.drawText(ascendant, {
-      x: width / 2 - 60,
-      y: y2 - 48,
-      size: 26,
-      font: fontBold,
-      color: gold,
-    });
-    page2.drawText(`Lord: ${ascendantLord}`, {
-      x: width / 2 - 40,
-      y: y2 - 62,
-      size: 11,
-      font: font,
-      color: white,
-    });
-    y2 -= 70;
-    
-    // ===== 2. RASHI & NAKSHATRA =====
-    page2.drawText('RASHI & NAKSHATRA', {
-      x: margin,
-      y: y2,
-      size: 14,
-      font: fontBold,
-      color: darkRed,
-    });
-    y2 -= 20;
-    
-    const rashiData = [
-      ['Rashi (Moon Sign)', rashi],
+
+    const pageWidth = 595;
+    const pageHeight = 842;
+    const margin = 45;
+
+    let currentPage = pdfDoc.addPage([pageWidth, pageHeight]);
+    let y = pageHeight - margin;
+
+    const colors = {
+      darkRed: rgb(0.545, 0, 0),
+      gold: rgb(0.831, 0.627, 0.09),
+      black: rgb(0, 0, 0),
+      gray: rgb(0.4, 0.4, 0.4),
+      darkGray: rgb(0.2, 0.2, 0.2),
+      white: rgb(1, 1, 1),
+      lightRed: rgb(0.996, 0.949, 0.949),
+      lightGold: rgb(0.996, 0.99, 0.91),
+      lightGreen: rgb(0.94, 0.99, 0.94),
+      lightBlue: rgb(0.94, 0.97, 0.99),
+      lightPurple: rgb(0.97, 0.94, 0.99),
+    };
+
+    const addNewPage = () => {
+      currentPage = pdfDoc.addPage([pageWidth, pageHeight]);
+      y = pageHeight - 50;
+      currentPage.drawText('AstroPlanets - Kundli Report', {
+        x: margin, y: pageHeight - 35, size: 12, font: fontBold, color: colors.darkRed
+      });
+    };
+
+    const checkSpace = (spaceNeeded) => {
+      if (y - spaceNeeded < 60) {
+        addNewPage();
+        return true;
+      }
+      return false;
+    };
+
+    // ========== COVER PAGE ==========
+    currentPage.drawRectangle({ x: 30, y: 30, width: pageWidth - 60, height: pageHeight - 60, borderColor: colors.gold, borderWidth: 3 });
+    currentPage.drawRectangle({ x: 40, y: 40, width: pageWidth - 80, height: pageHeight - 80, borderColor: colors.gold, borderWidth: 1 });
+
+    currentPage.drawText('ASTROPLANETS', { x: pageWidth/2 - 135, y: pageHeight - 130, size: 36, font: fontBold, color: colors.darkRed });
+    currentPage.drawText('Vedic Astrology Birth Chart Report', { x: pageWidth/2 - 155, y: pageHeight - 170, size: 14, font: font, color: colors.gold });
+
+    currentPage.drawText(userName.toUpperCase(), { x: pageWidth/2 - 110, y: pageHeight - 245, size: 26, font: fontBold, color: colors.darkRed });
+
+    let detailY = pageHeight - 340;
+    currentPage.drawRectangle({ x: pageWidth/2 - 165, y: detailY - 10, width: 330, height: 170, color: colors.lightRed, borderColor: colors.darkRed, borderWidth: 1.5 });
+
+    currentPage.drawText('BIRTH DETAILS', { x: pageWidth/2 - 65, y: detailY + 135, size: 13, font: fontBold, color: colors.darkRed });
+    detailY -= 25;
+    currentPage.drawText('Date  : ' + birthDate, { x: pageWidth/2 - 130, y: detailY + 100, size: 11, font: font, color: colors.darkGray });
+    currentPage.drawText('Time  : ' + birthTime, { x: pageWidth/2 - 130, y: detailY + 75, size: 11, font: font, color: colors.darkGray });
+    // currentPage.drawText('Place : ' + birthPlace, { x: pageWidth/2 - 130, y: detailY + 50, size: 11, font: font, color: colors.darkGray });
+    currentPage.drawText('Rashi : ' + rashi, { x: pageWidth/2 - 130, y: detailY + 25, size: 11, font: font, color: colors.darkGray });
+
+    currentPage.drawText('Generated: ' + new Date().toLocaleDateString(), { x: pageWidth/2 - 85, y: 55, size: 9, font: font, color: colors.gray });
+
+    // ========== CONTENT PAGE ==========
+    addNewPage();
+
+    currentPage.drawText('Kundli Report - ' + userName, { x: margin, y: y, size: 13, font: fontBold, color: colors.gold });
+    y -= 40;
+// 1. LAGNA
+checkSpace(100);
+
+const lagnaBoxHeight = 80;
+
+currentPage.drawRectangle({
+  x: margin,
+  y: y - lagnaBoxHeight,
+  width: pageWidth - 2 * margin,
+  height: lagnaBoxHeight,
+  color: colors.darkRed,
+});
+
+// Title
+const lagnaTitle = 'LAGNA (ASCENDANT)';
+const lagnaTitleWidth = fontBold.widthOfTextAtSize(lagnaTitle, 12);
+
+currentPage.drawText(lagnaTitle, {
+  x: (pageWidth - lagnaTitleWidth) / 2,
+  y: y - 22,
+  size: 12,
+  font: fontBold,
+  color: colors.white,
+});
+
+// Ascendant Name
+const ascWidth = fontBold.widthOfTextAtSize(ascendant, 24);
+
+currentPage.drawText(ascendant, {
+  x: (pageWidth - ascWidth) / 2,
+  y: y - 48,
+  size: 24,
+  font: fontBold,
+  color: colors.gold,
+});
+
+// Ascendant Lord
+const lordText = `Lord: ${ascendantLord}`;
+const lordWidth = font.widthOfTextAtSize(lordText, 10);
+
+currentPage.drawText(lordText, {
+  x: (pageWidth - lordWidth) / 2,
+  y: y - 65,
+  size: 10,
+  font: font,
+  color: colors.white,
+});
+
+// Bottom spacing
+y -= 100;
+
+    // 2. RASHI AND NAKSHATRA
+    checkSpace(110);
+    currentPage.drawText('RASHI AND NAKSHATRA', { x: margin, y: y, size: 13, font: fontBold, color: colors.darkRed });
+    y -= 22;
+
+    const rData = [
+      ['Rashi', rashi],
       ['Sign Lord', signLord],
-      ['Nakshatra (Birth Star)', nakshatra],
+      ['Nakshatra', nakshatra],
       ['Nakshatra Lord', nakshatraLord],
-      ['Pada / Charan', nakshatraPada]
+      ['Pada', nakshatraPada]
     ];
-    
-    const boxW = (width - 2 * margin - 20) / 2;
-    let rx = margin;
-    let ry = y2 - 20;
-    let rc = 0;
-    
-    for (const [label, value] of rashiData) {
-      const xPos = rc % 2 === 0 ? margin : margin + boxW + 20;
-      const yPos = ry;
-      
-      page2.drawRectangle({
-        x: xPos,
-        y: yPos - 20,
-        width: boxW,
-        height: 25,
-        color: lightBlue,
-        borderColor: gray,
-        borderWidth: 0.5,
-      });
-      
-      page2.drawText(`${label}: ${value}`, {
-        x: xPos + 8,
-        y: yPos - 14,
-        size: 10,
-        font: font,
-        color: black,
-      });
-      
-      rc++;
-      if (rc % 2 === 0) {
-        ry -= 30;
-      }
-    }
-    y2 = ry - 15;
-    
-    // ===== 3. MANGLIK DOSHA =====
-    const isManglik = manglik === 'Yes' || manglik === 'Manglik';
-    const manglikBg = isManglik ? rgb(0.8, 0.1, 0.1) : rgb(0.1, 0.6, 0.1);
-    
-    page2.drawRectangle({
-      x: margin,
-      y: y2 - 35,
-      width: width - 2 * margin,
-      height: 40,
-      color: manglikBg,
+
+    const rColW = (pageWidth - 2*margin - 20) / 2;
+    let ry = y;
+    rData.forEach(([label, val], i) => {
+      const x = margin + (i % 2) * (rColW + 20);
+      currentPage.drawRectangle({ x, y: ry - 22, width: rColW, height: 26, color: colors.lightBlue, borderColor: colors.gray, borderWidth: 0.5 });
+      currentPage.drawText(label + ': ' + val, { x: x + 8, y: ry - 14, size: 9.5, font: font, color: colors.black });
+      if (i % 2 === 1) ry -= 32;
     });
-    
-    page2.drawText(`MANGAL DOSHA: ${isManglik ? 'Manglik' : 'Non-Manglik'}`, {
-      x: width / 2 - 90,
-      y: y2 - 23,
-      size: 16,
-      font: fontBold,
-      color: white,
+    y = ry - 15;
+
+    // 3. MANGLIK
+    checkSpace(55);
+    y -=15;
+    const isManglik = manglik.toLowerCase().includes('yes') || manglik.toLowerCase().includes('manglik');
+    const mangColor = isManglik ? rgb(0.65, 0.05, 0.05) : rgb(0.1, 0.55, 0.1);
+    currentPage.drawRectangle({ x: margin, y: y - 35, width: pageWidth - 2*margin, height: 40, color: mangColor });
+    currentPage.drawText('MANGAL DOSHA: ' + (isManglik ? 'Manglik' : 'Non-Manglik'), { x: pageWidth/2 - 95, y: y - 20, size: 13, font: fontBold, color: colors.white });
+    y -= 55;
+
+    // 4. PLANETS
+    checkSpace(200);
+    currentPage.drawText('PLANETARY POSITIONS', { x: margin, y: y, size: 13, font: fontBold, color: colors.darkRed });
+    y -= 25;
+
+    const planetColWidths = [60, 55, 45, 45, 55];
+    const pHeaders = ['Planet', 'Sign', 'Degree', 'House', 'Retro'];
+    currentPage.drawRectangle({ x: margin, y: y - 18, width: pageWidth - 2*margin, height: 22, color: colors.darkRed });
+    let hx = margin + 6;
+    pHeaders.forEach((h, i) => {
+      currentPage.drawText(h, { x: hx, y: y - 12, size: 9, font: fontBold, color: colors.white });
+      hx += planetColWidths[i];
     });
-    y2 -= 45;
-    
-    // ===== 4. PLANETS TABLE =====
-    page2.drawText('PLANETARY POSITIONS', {
-      x: margin,
-      y: y2,
-      size: 14,
-      font: fontBold,
-      color: darkRed,
-    });
-    y2 -= 20;
-    
-    const tX = margin;
-    const tY = y2;
-    const tW = width - 2 * margin;
-    const cW = [70, 65, 50, 50, 65];
-    
-    // Header
-    page2.drawRectangle({
-      x: tX,
-      y: tY - 22,
-      width: tW,
-      height: 25,
-      color: darkRed,
-    });
-    
-    const headers = ['Planet', 'Sign', 'Degree', 'House', 'Retrograde'];
-    let hx = tX + 5;
-    for (let i = 0; i < headers.length; i++) {
-      page2.drawText(headers[i], {
-        x: hx,
-        y: tY - 15,
-        size: 10,
-        font: fontBold,
-        color: white,
-      });
-      hx += cW[i];
-    }
-    
-    y2 -= 25;
-    let rowY = y2;
-    
-    for (let i = 0; i < planetList.length; i++) {
-      const planet = planetList[i];
-      const pData = planets[planet] || {};
-      const isRetro = pData.retrograde ? 'Yes' : 'No';
-      
-      const rowBg = i % 2 === 0 ? rgb(0.98, 0.975, 0.96) : white;
-      page2.drawRectangle({
-        x: tX,
-        y: rowY - 18,
-        width: tW,
-        height: 20,
-        color: rowBg,
-        borderColor: gray,
-        borderWidth: 0.5,
-      });
-      
+    y -= 24;
+
+    planetList.forEach((p, i) => {
+      checkSpace(28);
+      const pd = planets[p] || {};
+      const rowColor = i % 2 === 0 ? rgb(0.98, 0.975, 0.96) : colors.white;
+
+      currentPage.drawRectangle({ x: margin, y: y - 18, width: pageWidth - 2*margin, height: 22, color: rowColor, borderColor: colors.gray, borderWidth: 0.4 });
+
       const rowData = [
-        planetNames[planet] || planet,
-        sanitize(pData.sign || 'N/A'),
-        `${sanitize(pData.degree || 'N/A')}°`,
-        sanitize(pData.house || 'N/A'),
-        isRetro
+        planetNames[p],
+        cleanText(pd.sign || 'N/A'),
+        cleanText(pd.degree || 'N/A') + '°',
+        cleanText(pd.house || 'N/A'),
+        pd.retrograde ? 'Yes' : 'No'
       ];
-      
-      let rx2 = tX + 5;
-      for (let j = 0; j < rowData.length; j++) {
-        page2.drawText(rowData[j], {
-          x: rx2,
-          y: rowY - 13,
-          size: 9,
-          font: j === 0 ? fontBold : font,
-          color: black,
-        });
-        rx2 += cW[j];
-      }
-      rowY -= 20;
-    }
-    y2 = rowY - 10;
-    
-    // ===== 5. HOUSES TABLE =====
+
+      let tx = margin + 6;
+      rowData.forEach((text, j) => {
+        currentPage.drawText(text, { x: tx, y: y - 12, size: 8.5, font: j === 0 ? fontBold : font, color: colors.black });
+        tx += planetColWidths[j];
+      });
+      y -= 24;
+    });
+    y -= 8;
+
+    // 5. HOUSES
     if (houses.length > 0) {
-      page2.drawText('HOUSES (BHAVAS)', {
-        x: margin,
-        y: y2,
-        size: 14,
-        font: fontBold,
-        color: darkRed,
-      });
-      y2 -= 20;
-      
-      const hX = margin;
-      const hY = y2;
-      const hW = width - 2 * margin;
-      const hC = [80, 100, 100];
-      
-      page2.drawRectangle({
-        x: hX,
-        y: hY - 20,
-        width: hW,
-        height: 22,
-        color: darkRed,
-      });
-      
+      checkSpace(140);
+      currentPage.drawText('HOUSES (BHAVAS)', { x: margin, y: y, size: 13, font: fontBold, color: colors.darkRed });
+      y -= 25;
+
+      const hColW = [55, 85, 85];
       const hHeaders = ['House', 'Sign', 'Lord'];
-      let hhx = hX + 5;
-      for (let i = 0; i < hHeaders.length; i++) {
-        page2.drawText(hHeaders[i], {
-          x: hhx,
-          y: hY - 14,
-          size: 10,
-          font: fontBold,
-          color: white,
+      currentPage.drawRectangle({ x: margin, y: y - 18, width: pageWidth - 2*margin, height: 22, color: colors.darkRed });
+      let hhx = margin + 6;
+      hHeaders.forEach((h, i) => {
+        currentPage.drawText(h, { x: hhx, y: y - 12, size: 9, font: fontBold, color: colors.white });
+        hhx += hColW[i];
+      });
+      y -= 24;
+
+      houses.slice(0, 12).forEach((h, i) => {
+        checkSpace(28);
+        const rowColor = i % 2 === 0 ? rgb(0.98, 0.975, 0.96) : colors.white;
+        currentPage.drawRectangle({ x: margin, y: y - 18, width: pageWidth - 2*margin, height: 22, color: rowColor, borderColor: colors.gray, borderWidth: 0.4 });
+
+        const hData = [
+          'H' + (h.number || i+1),
+          cleanText(h.sign || 'N/A'),
+          cleanText(h.lord || 'N/A')
+        ];
+        let tx = margin + 6;
+        hData.forEach((text, j) => {
+          currentPage.drawText(text, { x: tx, y: y - 12, size: 8.5, font: j === 0 ? fontBold : font, color: colors.black });
+          tx += hColW[j];
         });
-        hhx += hC[i];
-      }
-      
-      y2 -= 22;
-      let hRowY = y2;
-      
-      for (let i = 0; i < Math.min(12, houses.length); i++) {
-        const house = houses[i] || {};
-        const houseNum = house.number || i + 1;
-        const houseSign = sanitize(house.sign || 'N/A');
-        const houseLord = sanitize(house.lord || 'N/A');
-        
-        const rowBg = i % 2 === 0 ? rgb(0.98, 0.975, 0.96) : white;
-        page2.drawRectangle({
-          x: hX,
-          y: hRowY - 18,
-          width: hW,
-          height: 20,
-          color: rowBg,
-          borderColor: gray,
-          borderWidth: 0.5,
-        });
-        
-        const hRowData = [`House ${houseNum}`, houseSign, houseLord];
-        let hrx = hX + 5;
-        for (let j = 0; j < hRowData.length; j++) {
-          page2.drawText(hRowData[j], {
-            x: hrx,
-            y: hRowY - 13,
-            size: 9,
-            font: j === 0 ? fontBold : font,
-            color: black,
-          });
-          hrx += hC[j];
-        }
-        hRowY -= 20;
-      }
-      y2 = hRowY - 10;
+        y -= 24;
+      });
+      y -= 8;
     }
-    
-    // ===== 6. VEDIC DETAILS =====
-    page2.drawText('VEDIC DETAILS', {
-      x: margin,
-      y: y2,
-      size: 14,
-      font: fontBold,
-      color: darkRed,
-    });
-    y2 -= 20;
-    
+
+    // 6. VEDIC DETAILS
+    checkSpace(160);
+    currentPage.drawText('VEDIC DETAILS', { x: margin, y: y, size: 13, font: fontBold, color: colors.darkRed });
+    y -= 25;
+
     const vedicData = [
-      ['Yoga', yoga],
-      ['Tithi', tithi],
-      ['Karana', karana],
-      ['Gan', gan],
-      ['Nadi', nadi],
-      ['Varna', varna],
-      ['Vashya', vashya],
-      ['Yoni', yoni],
-      ['Sign Lord', signLord],
-      ['Tatva', tatva],
-      ['Paya', paya],
-      ['Alphabet', nameAlphabet]
+      ['Yoga', yoga], ['Tithi', tithi], ['Karana', karana], ['Gan', gan],
+      ['Nadi', nadi], ['Varna', varna], ['Vashya', vashya], ['Yoni', yoni],
+      ['Tatva', tatva], ['Paya', paya], ['Alphabet', nameAlphabet], ['Sign Lord', signLord]
     ];
-    
-    const vCW = (width - 2 * margin - 15) / 3;
-    let vRow = y2 - 18;
-    let vCol = 0;
-    
-    for (const [label, value] of vedicData) {
-      const xPos = margin + (vCol * (vCW + 7));
-      const yPos = vRow;
-      
-      page2.drawRectangle({
-        x: xPos,
-        y: yPos - 18,
-        width: vCW,
-        height: 22,
-        color: lightPurple,
-        borderColor: gray,
-        borderWidth: 0.5,
-      });
-      
-      page2.drawText(`${label}: ${value}`, {
-        x: xPos + 5,
-        y: yPos - 13,
-        size: 9,
-        font: font,
-        color: black,
-      });
-      
-      vCol++;
-      if (vCol === 3) {
-        vCol = 0;
-        vRow -= 26;
-      }
-    }
-    y2 = vRow - 10;
-    
-    // ===== 7. DASHA =====
-    page2.drawText('CURRENT VIMSHOTTARI DASHA', {
-      x: margin,
-      y: y2,
-      size: 14,
-      font: fontBold,
-      color: darkRed,
+
+    const vColW = (pageWidth - 2*margin - 25) / 2;
+    let vy = y;
+    let vcol = 0;
+    vedicData.forEach(([label, value]) => {
+      const x = margin + vcol * (vColW + 25);
+      currentPage.drawRectangle({ x, y: vy - 22, width: vColW, height: 26, color: colors.lightPurple, borderColor: colors.gray, borderWidth: 0.5 });
+      currentPage.drawText(label + ':', { x: x + 8, y: vy - 14, size: 9, font: fontBold, color: colors.darkGray });
+      currentPage.drawText(value, { x: x + 80, y: vy - 14, size: 9, font: font, color: colors.black });
+      vcol++;
+      if (vcol === 2) { vcol = 0; vy -= 32; }
     });
-    y2 -= 20;
-    
-    page2.drawRectangle({
-      x: margin,
-      y: y2 - 35,
-      width: width - 2 * margin,
-      height: 40,
-      color: lightGold,
-      borderColor: gold,
-      borderWidth: 1,
-    });
-    
-    page2.drawText(`Maha Dasha: ${mahaDasha}`, {
-      x: width / 2 - 130,
-      y: y2 - 24,
-      size: 11,
-      font: fontBold,
-      color: darkGray,
-    });
-    page2.drawText(`Antar Dasha: ${antarDasha}`, {
-      x: width / 2 - 20,
-      y: y2 - 24,
-      size: 11,
-      font: fontBold,
-      color: darkGray,
-    });
-    page2.drawText(`Valid Until: ${dashaEndDate}`, {
-      x: width / 2 + 80,
-      y: y2 - 24,
-      size: 11,
-      font: fontBold,
-      color: darkGray,
-    });
-    y2 -= 50;
-    
-    // ===== 8. PANCHANG =====
-    page2.drawText('DAILY PANCHANG', {
-      x: margin,
-      y: y2,
-      size: 14,
-      font: fontBold,
-      color: darkRed,
-    });
-    y2 -= 20;
-    
-    const panchangDataList = [
-      ['Sunrise', sunrise],
-      ['Sunset', sunset],
-      ['Moonrise', moonrise],
-      ['Tithi', panchangTithi],
-      ['Nakshatra', panchangNakshatra],
-      ['Yoga', panchangYoga],
-      ['Karana', panchangKarana],
-      ['Paksha', paksha]
+    y = vy - 15;
+
+    // 7. DASHA
+    checkSpace(70);
+    currentPage.drawText('CURRENT DASHA', { x: margin, y: y, size: 13, font: fontBold, color: colors.darkRed });
+    y -= 25;
+    currentPage.drawRectangle({ x: margin, y: y - 38, width: pageWidth - 2*margin, height: 48, color: colors.lightGold, borderColor: colors.gold, borderWidth: 1.5 });
+    currentPage.drawText('Maha Dasha : ' + mahaDasha, { x: margin + 25, y: y - 20, size: 10, font: fontBold, color: colors.darkGray });
+    currentPage.drawText('Antar Dasha : ' + antarDasha, { x: margin + 230, y: y - 20, size: 10, font: fontBold, color: colors.darkGray });
+    currentPage.drawText('Ends : ' + dashaEndDate, { x: margin + 25, y: y - 35, size: 9.5, font: font, color: colors.darkGray });
+    y -= 60;
+
+    // 8. PANCHANG
+    checkSpace(160);
+    currentPage.drawText('PANCHANG', { x: margin, y: y, size: 13, font: fontBold, color: colors.darkRed });
+    y -= 25;
+
+    const panchangList = [
+      ['Sunrise', sunrise], ['Sunset', sunset], ['Moonrise', moonrise],
+      ['Tithi', panchangTithi], ['Nakshatra', panchangNakshatra],
+      ['Yoga', panchangYoga], ['Karana', panchangKarana], ['Paksha', paksha]
     ];
+
+    let py = y;
+    let pcol = 0;
+    const pColW = (pageWidth - 2*margin - 20) / 2;
     
-    const pCW = (width - 2 * margin - 10) / 2;
-    let pRow = y2 - 18;
-    let pCol = 0;
-    
-    for (const [label, value] of panchangDataList) {
-      const xPos = pCol === 0 ? margin : margin + pCW + 10;
-      const yPos = pRow;
-      
-      page2.drawRectangle({
-        x: xPos,
-        y: yPos - 18,
-        width: pCW,
-        height: 22,
-        color: lightGreen,
-        borderColor: rgb(0.86, 0.97, 0.86),
-        borderWidth: 0.5,
-      });
-      
-      page2.drawText(`${label}: ${value}`, {
-        x: xPos + 5,
-        y: yPos - 13,
-        size: 10,
-        font: font,
-        color: black,
-      });
-      
-      pCol++;
-      if (pCol === 2) {
-        pCol = 0;
-        pRow -= 26;
-      }
-    }
-    y2 = pRow - 10;
-    
-    // ===== 9. MUHURAT TIMINGS =====
+    panchangList.forEach(([label, val]) => {
+      const x = margin + (pcol % 2) * (pColW + 20);
+      currentPage.drawRectangle({ x, y: py - 22, width: pColW, height: 26, color: colors.lightGreen, borderColor: colors.gray, borderWidth: 0.5 });
+      currentPage.drawText(label + ': ' + val, { x: x + 8, y: py - 14, size: 9, font: font, color: colors.black });
+      if (pcol % 2 === 1) py -= 32;
+      pcol++;
+    });
+    y = py - 15;
+
+    // 9. MUHURAT
     if (rahuKaal !== 'N/A' || yamaganda !== 'N/A' || gulika !== 'N/A') {
-      page2.drawText('MUHURAT TIMINGS', {
-        x: margin,
-        y: y2,
-        size: 14,
-        font: fontBold,
-        color: darkRed,
-      });
-      y2 -= 20;
-      
-      const mData = [
-        ['Rahu Kaal', rahuKaal, '#ff6b6b'],
-        ['Yamaganda', yamaganda, '#ffd93d'],
-        ['Gulika', gulika, '#6bcb77']
+      checkSpace(70);
+      currentPage.drawText('MUHURAT TIMINGS', { x: margin, y: y, size: 13, font: fontBold, color: colors.darkRed });
+      y -= 25;
+
+      const muhurats = [
+        ['Rahu Kaal', rahuKaal, rgb(0.7, 0.1, 0.1)],
+        ['Yamaganda', yamaganda, rgb(0.9, 0.55, 0.1)],
+        ['Gulika', gulika, rgb(0.1, 0.6, 0.3)]
       ];
-      
-      const mCW = (width - 2 * margin - 20) / 3;
-      let mRow = y2 - 18;
-      
-      for (const [label, value, color] of mData) {
-        const xPos = margin + (mData.indexOf([label, value, color]) * (mCW + 10));
-        const yPos = mRow;
-        
-        const bgColor = color === '#ff6b6b' ? rgb(1, 0.42, 0.42) : 
-                        color === '#ffd93d' ? rgb(1, 0.85, 0.24) : 
-                        rgb(0.42, 0.8, 0.47);
-        
-        page2.drawRectangle({
-          x: xPos,
-          y: yPos - 18,
-          width: mCW,
-          height: 22,
-          color: bgColor,
-          borderColor: gray,
-          borderWidth: 0.5,
-        });
-        
-        const textColor = color === '#ff6b6b' ? white : black;
-        page2.drawText(`${label}: ${value}`, {
-          x: xPos + 5,
-          y: yPos - 13,
-          size: 10,
-          font: fontBold,
-          color: textColor,
-        });
-      }
-      y2 = mRow - 25;
+
+      const mW = (pageWidth - 2*margin - 30) / 3;
+      muhurats.forEach((item, i) => {
+        const x = margin + i * (mW + 15);
+        currentPage.drawRectangle({ x, y: y - 25, width: mW, height: 32, color: item[2] });
+        currentPage.drawText(item[0], { x: x + 8, y: y - 12, size: 8.5, font: fontBold, color: colors.white });
+        currentPage.drawText(item[1], { x: x + 8, y: y - 24, size: 8.5, font: font, color: colors.white });
+      });
     }
-    
-    // ===== FOOTER =====
-    const footerY = 30;
-    page2.drawText('This report is based on Vedic astrology calculations.', {
-      x: width / 2 - 130,
-      y: footerY + 10,
-      size: 8,
-      font: font,
-      color: gray,
+
+    // Footer
+    currentPage.drawText('This is a computer generated Vedic astrology report for reference only.', {
+      x: pageWidth/2 - 170, y: 38, size: 8, font: font, color: colors.gray
     });
-    page2.drawText(`(c) ${new Date().getFullYear()} AstroPlanets - All Rights Reserved`, {
-      x: width / 2 - 120,
-      y: footerY - 5,
-      size: 8,
-      font: font,
-      color: gray,
+    currentPage.drawText('(c) ' + new Date().getFullYear() + ' AstroPlanets', {
+      x: pageWidth/2 - 65, y: 23, size: 8, font: font, color: colors.gray
     });
-    
-    // ========== SAVE PDF ==========
+
+    // ========== SAVE ==========
     const pdfBytes = await pdfDoc.save();
-    
-    console.log('✅ PDF generated successfully. Size:', pdfBytes.length);
-    
+
+    console.log('PDF generated successfully. Size:', pdfBytes.length);
+
     res.setHeader('Content-Type', 'application/pdf');
-    res.setHeader('Content-Disposition', 'attachment; filename=kundli_report.pdf');
+    res.setHeader('Content-Disposition', 'attachment; filename=' + userName.replace(/[^a-zA-Z0-9]/g, '_') + '_kundli_report.pdf');
     res.setHeader('Content-Length', pdfBytes.length);
     res.send(Buffer.from(pdfBytes));
-    
+
   } catch (error) {
-    console.error('❌ PDF generation error:', error);
-    console.error('Error stack:', error.stack);
-    res.status(500).json({
-      success: false,
-      message: 'Failed to generate PDF: ' + error.message
+    console.error('PDF generation error:', error);
+    res.status(500).json({ 
+      success: false, 
+      message: 'Failed to generate PDF: ' + error.message 
     });
   }
 });
-
 
 
 // ================== SAVE PURCHASED KUNDLI ==================
