@@ -9,28 +9,23 @@ const getProducts = async (req, res) => {
     
     let query = { isActive: true };
     
-    // Search by name
     if (search) {
       query.name = { $regex: search, $options: 'i' };
     }
     
-    // Filter by type
     if (type) {
       query.type = type;
     }
     
-    // Filter by gemstone
     if (gemstone) {
       query.gemstone = gemstone;
     }
     
-    // Filter by stock
     if (inStock === 'true') {
       query.inStock = true;
       query.stock = { $gt: 0 };
     }
     
-    // Filter by price range
     if (minPrice || maxPrice) {
       query.price = {};
       if (minPrice) query.price.$gte = Number(minPrice);
@@ -68,6 +63,8 @@ const getProductById = async (req, res) => {
 // @access  Private (Admin only)
 const createProduct = async (req, res) => {
   try {
+    console.log('📝 Creating product:', req.body);
+
     const {
       name,
       price,
@@ -88,17 +85,25 @@ const createProduct = async (req, res) => {
       origin,
       category,
     } = req.body;
-    
+
+    // ✅ Validate required fields
+    if (!name || !price || !image || !type) {
+      return res.status(400).json({
+        success: false,
+        msg: 'Name, price, image, and type are required'
+      });
+    }
+
     const product = await Product.create({
-      name,
-      price,
-      oldPrice: oldPrice || null,
-      image,
-      images: images || [image],
-      type,
+      name: name.trim(),
+      price: Number(price),
+      oldPrice: oldPrice ? Number(oldPrice) : null,
+      image: image,
+      images: images && Array.isArray(images) ? images : [image],
+      type: type.trim(), // ✅ No enum validation now
       gemstone: gemstone || 'Rudraksha',
-      inStock: stock > 0,
-      stock: stock || 10,
+      inStock: Number(stock) > 0,
+      stock: Number(stock) || 10,
       sold: 0,
       discount: discount || null,
       subtitle: subtitle || '',
@@ -109,16 +114,33 @@ const createProduct = async (req, res) => {
       weight: weight || '',
       dimensions: dimensions || '',
       origin: origin || 'Nepal / India',
-      category: category || type,
+      category: category || type.trim(), // ✅ No enum validation now
     });
     
+    console.log('✅ Product created:', product._id);
+    
     res.status(201).json({
+      success: true,
       msg: 'Product created successfully',
       product,
     });
   } catch (error) {
-    console.error('Create product error:', error);
-    res.status(500).json({ msg: 'Server error', error: error.message });
+    console.error('❌ Create product error:', error);
+    
+    if (error.name === 'ValidationError') {
+      const errors = Object.values(error.errors).map(err => err.message);
+      return res.status(400).json({
+        success: false,
+        msg: 'Validation error',
+        errors
+      });
+    }
+    
+    res.status(500).json({ 
+      success: false,
+      msg: 'Server error', 
+      error: error.message 
+    });
   }
 };
 
@@ -127,69 +149,83 @@ const createProduct = async (req, res) => {
 // @access  Private (Admin only)
 const updateProduct = async (req, res) => {
   try {
+    console.log('📝 Update Product ID:', req.params.id);
+    console.log('📦 Update Data:', req.body);
+
     const product = await Product.findById(req.params.id);
     
     if (!product) {
-      return res.status(404).json({ msg: 'Product not found' });
+      return res.status(404).json({ 
+        success: false,
+        msg: 'Product not found' 
+      });
     }
-    
-    const {
-      name,
-      price,
-      oldPrice,
-      image,
-      images,
-      type,
-      gemstone,
-      stock,
-      sold,
-      rating,
-      discount,
-      subtitle,
-      description,
-      designerNote,
-      color,
-      material,
-      weight,
-      dimensions,
-      origin,
-      category,
-      isActive,
-    } = req.body;
-    
-    // Update fields
-    product.name = name || product.name;
-    product.price = price || product.price;
-    product.oldPrice = oldPrice !== undefined ? oldPrice : product.oldPrice;
-    product.image = image || product.image;
-    product.images = images || product.images;
-    product.type = type || product.type;
-    product.gemstone = gemstone || product.gemstone;
-    product.stock = stock !== undefined ? stock : product.stock;
-    product.sold = sold !== undefined ? sold : product.sold;
-    product.rating = rating !== undefined ? rating : product.rating;
-    product.inStock = (stock !== undefined ? stock : product.stock) > 0;
-    product.discount = discount !== undefined ? discount : product.discount;
-    product.subtitle = subtitle !== undefined ? subtitle : product.subtitle;
-    product.description = description !== undefined ? description : product.description;
-    product.designerNote = designerNote !== undefined ? designerNote : product.designerNote;
-    product.color = color !== undefined ? color : product.color;
-    product.material = material || product.material;
-    product.weight = weight !== undefined ? weight : product.weight;
-    product.dimensions = dimensions !== undefined ? dimensions : product.dimensions;
-    product.origin = origin || product.origin;
-    product.category = category || product.category;
-    product.isActive = isActive !== undefined ? isActive : product.isActive;
-    
+
+    // ✅ Update ONLY the fields that are sent
+    const allowedFields = [
+      'name', 'price', 'oldPrice', 'image', 'images', 'type', 
+      'gemstone', 'stock', 'discount', 'subtitle', 'description',
+      'color', 'material', 'weight', 'dimensions', 'origin', 
+      'category', 'isActive', 'rating'
+    ];
+
+    let hasUpdates = false;
+    allowedFields.forEach(field => {
+      if (req.body[field] !== undefined && req.body[field] !== null && req.body[field] !== '') {
+        // Convert numbers
+        if (['price', 'oldPrice', 'stock', 'rating'].includes(field)) {
+          product[field] = Number(req.body[field]);
+        } else {
+          product[field] = req.body[field];
+        }
+        hasUpdates = true;
+      }
+    });
+
+    if (!hasUpdates) {
+      return res.status(400).json({
+        success: false,
+        msg: 'No valid fields to update'
+      });
+    }
+
+    // ✅ Auto-update inStock based on stock
+    if (req.body.stock !== undefined) {
+      product.inStock = Number(req.body.stock) > 0;
+    }
+
+    // ✅ Auto-calculate discount
+    if (product.oldPrice && product.price && product.oldPrice > product.price) {
+      const discountPercent = Math.round(((product.oldPrice - product.price) / product.oldPrice) * 100);
+      product.discount = `${discountPercent}% OFF`;
+    }
+
     await product.save();
-    
+
+    console.log('✅ Product Updated:', product._id);
+
     res.json({
+      success: true,
       msg: 'Product updated successfully',
       product,
     });
   } catch (error) {
-    console.error('Update product error:', error);
-    res.status(500).json({ msg: 'Server error', error: error.message });
+    console.error('❌ Update error:', error);
+    console.error('Error details:', error.message);
+    
+    if (error.name === 'ValidationError') {
+      const errors = Object.values(error.errors).map(err => err.message);
+      return res.status(400).json({
+        success: false,
+        msg: 'Validation error',
+        errors
+      });
+    }
+    
+    res.status(500).json({ 
+      success: false,
+      msg: error.message || 'Server error'
+    });
   }
 };
 
@@ -206,10 +242,17 @@ const deleteProduct = async (req, res) => {
     
     await product.deleteOne();
     
-    res.json({ msg: 'Product deleted successfully' });
+    res.json({ 
+      success: true,
+      msg: 'Product deleted successfully' 
+    });
   } catch (error) {
     console.error('Delete product error:', error);
-    res.status(500).json({ msg: 'Server error', error: error.message });
+    res.status(500).json({ 
+      success: false,
+      msg: 'Server error', 
+      error: error.message 
+    });
   }
 };
 
@@ -229,6 +272,7 @@ const getProductStats = async (req, res) => {
       .select('name price sold rating');
     
     res.json({
+      success: true,
       totalProducts,
       activeProducts,
       lowStock,
@@ -237,7 +281,11 @@ const getProductStats = async (req, res) => {
     });
   } catch (error) {
     console.error('Get product stats error:', error);
-    res.status(500).json({ msg: 'Server error', error: error.message });
+    res.status(500).json({ 
+      success: false,
+      msg: 'Server error', 
+      error: error.message 
+    });
   }
 };
 
