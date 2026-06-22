@@ -10,42 +10,47 @@ const loginAdmin = async (req, res) => {
   const { email, password } = req.body;
 
   try {
-    console.log('Admin login attempt:', email);
-    
+    console.log('🔐 Admin login attempt:', email);
+
+    // Check if admin exists
     const admin = await Admin.findOne({ email });
-    
     if (!admin) {
-      console.log('Admin not found:', email);
+      console.log('❌ Admin not found:', email);
       return res.status(401).json({ msg: 'Invalid admin credentials' });
     }
 
-    console.log('Admin found, comparing password...');
+    // Verify password
     const isPasswordValid = await admin.comparePassword(password);
-    console.log('Password valid:', isPasswordValid);
-
     if (!isPasswordValid) {
+      console.log('❌ Invalid password for admin:', email);
       return res.status(401).json({ msg: 'Invalid admin credentials' });
     }
 
+    // Check if admin is active
     if (!admin.isActive) {
+      console.log('❌ Admin account disabled:', email);
       return res.status(401).json({ msg: 'Admin account is disabled' });
     }
 
+    // Generate token
     const token = generateToken(admin._id);
-    console.log('Admin login successful, token generated');
+    console.log('✅ Admin login successful for:', email);
 
+    // ✅ Ensure response includes both token and admin object
     res.json({
+      success: true,
       msg: 'Admin login successful',
+      token,
       admin: {
         _id: admin._id,
         fullName: admin.fullName,
         email: admin.email,
         role: admin.role,
+        isActive: admin.isActive,
       },
-      token: token,
     });
   } catch (error) {
-    console.error('Admin login error:', error);
+    console.error('❌ Admin login error:', error);
     res.status(500).json({ msg: 'Server error', error: error.message });
   }
 };
@@ -57,13 +62,11 @@ const createAdmin = async (req, res) => {
   const { fullName, email, password, role } = req.body;
 
   try {
-    // Check if admin exists
     const adminExists = await Admin.findOne({ email });
     if (adminExists) {
       return res.status(400).json({ msg: 'Admin already exists' });
     }
 
-    // Create admin
     const admin = await Admin.create({
       fullName,
       email,
@@ -73,6 +76,7 @@ const createAdmin = async (req, res) => {
     });
 
     res.status(201).json({
+      success: true,
       msg: 'Admin created successfully',
       admin: {
         _id: admin._id,
@@ -93,7 +97,7 @@ const createAdmin = async (req, res) => {
 const getAllUsers = async (req, res) => {
   try {
     const users = await User.find({}).select('-password');
-    res.json(users);
+    res.json({ success: true, users });
   } catch (error) {
     console.error('Get users error:', error);
     res.status(500).json({ msg: 'Server error' });
@@ -116,7 +120,11 @@ const updateUserStatus = async (req, res) => {
     user.isActive = isActive;
     await user.save();
 
-    res.json({ msg: 'User status updated', user: { _id: user._id, isActive: user.isActive } });
+    res.json({
+      success: true,
+      msg: 'User status updated',
+      user: { _id: user._id, isActive: user.isActive },
+    });
   } catch (error) {
     console.error('Update user error:', error);
     res.status(500).json({ msg: 'Server error' });
@@ -133,6 +141,7 @@ const getDashboardStats = async (req, res) => {
     const totalAdmins = await Admin.countDocuments();
 
     res.json({
+      success: true,
       totalUsers,
       activeUsers,
       totalAdmins,
@@ -149,7 +158,7 @@ const getDashboardStats = async (req, res) => {
 const getCurrentAdmin = async (req, res) => {
   try {
     const admin = await Admin.findById(req.admin._id).select('-password');
-    res.json(admin);
+    res.json({ success: true, admin });
   } catch (error) {
     console.error('Get admin error:', error);
     res.status(500).json({ msg: 'Server error' });
@@ -162,17 +171,14 @@ const initializeDefaultAdmin = async () => {
   try {
     const defaultAdminEmail = 'admin@astroplanet.com';
     const defaultPassword = 'ashtro#admin@123';
-    
-    // Check if admin exists
+
     let existingAdmin = await Admin.findOne({ email: defaultAdminEmail });
-    
+
     if (!existingAdmin) {
       console.log('Creating default admin...');
-      
-      // Create admin with proper password hashing
       const salt = await bcrypt.genSalt(10);
       const hashedPassword = await bcrypt.hash(defaultPassword, salt);
-      
+
       const defaultAdmin = new Admin({
         fullName: 'Super Admin',
         email: defaultAdminEmail,
@@ -180,23 +186,13 @@ const initializeDefaultAdmin = async () => {
         role: 'super_admin',
         isActive: true,
       });
-      
+
       await defaultAdmin.save();
       console.log('✅ Default admin created successfully!');
       console.log('Email:', defaultAdminEmail);
       console.log('Password:', defaultPassword);
     } else {
       console.log('✅ Default admin already exists');
-      
-      // Optional: Update password if needed (for testing)
-      // Uncomment this to reset password if you're having issues
-      /*
-      const salt = await bcrypt.genSalt(10);
-      const hashedPassword = await bcrypt.hash(defaultPassword, salt);
-      existingAdmin.password = hashedPassword;
-      await existingAdmin.save();
-      console.log('Admin password reset successfully');
-      */
     }
   } catch (error) {
     console.error('❌ Error creating default admin:', error);
