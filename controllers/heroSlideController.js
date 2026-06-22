@@ -1,13 +1,12 @@
 // controllers/heroSlideController.js
 const HeroSlide = require("../models/HeroSlide");
+const { cloudinary } = require("../config/cloudinary");
 
 // CREATE
 exports.createSlide = async (req, res) => {
   try {
-    console.log("Request body:", req.body);
-    console.log("Request file:", req.file);
+    console.log("Create slide request received");
 
-    // Check if file was uploaded
     if (!req.file) {
       return res.status(400).json({
         success: false,
@@ -24,8 +23,23 @@ exports.createSlide = async (req, res) => {
       });
     }
 
+    // Upload to Cloudinary from memory buffer
+    const result = await new Promise((resolve, reject) => {
+      const uploadStream = cloudinary.uploader.upload_stream(
+        {
+          folder: "hero-slides",
+          allowed_formats: ["jpg", "png", "jpeg", "webp"],
+        },
+        (error, result) => {
+          if (error) reject(error);
+          else resolve(result);
+        }
+      );
+      uploadStream.end(req.file.buffer);
+    });
+
     const slide = await HeroSlide.create({
-      image: req.file.path, // Cloudinary URL
+      image: result.secure_url,
       link: req.body.link || "",
     });
 
@@ -77,16 +91,11 @@ exports.deleteSlide = async (req, res) => {
     // Delete from Cloudinary
     if (slide.image) {
       try {
-        // Extract public ID from Cloudinary URL
-        const urlParts = slide.image.split('/');
-        const fileName = urlParts[urlParts.length - 1];
-        const publicId = `hero-slides/${fileName.split('.')[0]}`;
-        
+        const publicId = slide.image.split('/').slice(-2).join('/').split('.')[0];
         await cloudinary.uploader.destroy(publicId);
         console.log("Deleted from Cloudinary:", publicId);
       } catch (cloudinaryError) {
         console.error("Cloudinary delete error:", cloudinaryError);
-        // Continue with database deletion even if Cloudinary fails
       }
     }
 
@@ -105,11 +114,12 @@ exports.deleteSlide = async (req, res) => {
   }
 };
 
-// UPDATE
+// UPDATE - Image is now OPTIONAL
 exports.updateSlide = async (req, res) => {
   try {
-    console.log("Update - Request body:", req.body);
-    console.log("Update - Request file:", req.file);
+    console.log("Update slide request received");
+    console.log("Request body:", req.body);
+    console.log("Request file:", req.file ? "File present" : "No file");
 
     const slide = await HeroSlide.findById(req.params.id);
 
@@ -120,27 +130,40 @@ exports.updateSlide = async (req, res) => {
       });
     }
 
-    // Update image if new file uploaded
+    // Update image ONLY IF new file is uploaded
     if (req.file) {
       // Delete old image from Cloudinary
       if (slide.image) {
         try {
-          const urlParts = slide.image.split('/');
-          const fileName = urlParts[urlParts.length - 1];
-          const publicId = `hero-slides/${fileName.split('.')[0]}`;
-          
+          const publicId = slide.image.split('/').slice(-2).join('/').split('.')[0];
           await cloudinary.uploader.destroy(publicId);
-          console.log("Deleted old image from Cloudinary:", publicId);
+          console.log("Deleted old image:", publicId);
         } catch (cloudinaryError) {
           console.error("Cloudinary delete error:", cloudinaryError);
         }
       }
-      slide.image = req.file.path;
+
+      // Upload new image from memory buffer
+      const result = await new Promise((resolve, reject) => {
+        const uploadStream = cloudinary.uploader.upload_stream(
+          {
+            folder: "hero-slides",
+            allowed_formats: ["jpg", "png", "jpeg", "webp"],
+          },
+          (error, result) => {
+            if (error) reject(error);
+            else resolve(result);
+          }
+        );
+        uploadStream.end(req.file.buffer);
+      });
+
+      slide.image = result.secure_url;
     }
 
-    // Update link
+    // Update link - ALWAYS update if provided
     if (req.body.link !== undefined) {
-      slide.link = req.body.link;
+      slide.link = req.body.link || "";
     }
 
     await slide.save();
