@@ -3,8 +3,6 @@ const router = express.Router();
 const axios = require('axios');
 const { protect } = require('../middleware/auth');
 const User = require('../models/User');
-const puppeteer = require('puppeteer-core');
-const chromium = require('@sparticuz/chromium');
 const pdf = require('html-pdf');
 
 // ✅ Correct API Base URL
